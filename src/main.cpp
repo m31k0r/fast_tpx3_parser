@@ -1,97 +1,64 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <future>
 #include <iostream>
 #include <iterator>
 #include <thread>
 
+#include "Batch_Pool.hpp"
 #include "Memory_Map.hpp"
+#include "Sorting_Buffer.hpp"
 #include "mpmc_queue.h"
 #include "tpx3_helper.hpp"
 
 constexpr size_t BATCH_SIZE = 500;
-constexpr size_t BATCH_POOL_SIZE = 128;
+constexpr size_t BATCH_POOL_SIZE = 64 * 128;
 constexpr size_t QUEUE_SIZE = 128;
+
+constexpr auto num_runs = 50;
 
 template <typename T>
 struct Batch {
     std::array<T, BATCH_SIZE> data{};
     size_t insert_idx{0};
-    size_t sequence_number{0};
-    uint8_t chip_nr{0};
+    std::atomic<bool> in_use{false};
 };
 
-template <typename Batch, size_t BATCH_POOL_SIZE>
-class Batch_Pool {
-    std::vector<std::unique_ptr<Batch>> m_batches;
-    es::lockfree::mpmc_queue<Batch *, BATCH_POOL_SIZE> m_free_batches;
-
-   public:
-    Batch_Pool() {
-        m_batches.reserve(BATCH_POOL_SIZE);
-        for (size_t i = 0; i < BATCH_POOL_SIZE; ++i) {
-            auto batch = std::make_unique<Batch>();
-            m_free_batches.push(batch.get());
-            m_batches.push_back(std::move(batch));
+template <typename Batch>
+void exchange_batch_on_full(
+    Batch *&batch, Batch_Pool<Batch, BATCH_POOL_SIZE> &batch_pool,
+    es::lockfree::mpmc_queue<Batch *, QUEUE_SIZE> &queue) {
+    if (batch->insert_idx >= BATCH_SIZE) {
+        while (not queue.push(batch)) {
         }
+        batch = batch_pool.acquire_batch_blocking();
     }
-    Batch *acquire_batch() {
-        Batch *batch;
-        if (m_free_batches.pop(batch)) {
-            return batch;
-        } else {
-            return nullptr;
-        }
-    }
-    bool release_batch(Batch *t_batch) { return m_free_batches.push(t_batch); }
-    Batch *acquire_batch_blocking() {
-        Batch *batch = nullptr;
-        while (not m_free_batches.pop(batch)) {
-            //            std::this_thread::sleep_for(std::chrono::nanooseconds(10));
-        }
-        return batch;
-    }
-    void release_batch_blocking(Batch *t_batch) {
-        while (not m_free_batches.push(t_batch)) {
-            //            std::this_thread::sleep_for(std::chrono::nanoseconds(10));
-        }
-    };
-};
+}
 
 class BatchHandle {
    public:
     Batch<uint64_t> *hit_batches[4];
     Batch<uint64_t> *trigger_batch;
     Batch_Pool<Batch<uint64_t>, BATCH_POOL_SIZE> batch_pool;
-    size_t m_sequence_number[5] = {0, 0, 0, 0, 0};
 
-    es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> m_hit_queue;
-    es::lockfree::mpmc_queue<Batch<uint64_t> *, BATCH_POOL_SIZE>
-        m_trigger_queue;
+    es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> m_hit_queue[4];
+    es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> m_trigger_queue;
 
-    Batch<uint64_t> *new_batch(Batch<uint64_t> *t_old_batch, size_t chip_nr) {
-        auto new_batch = batch_pool.acquire_batch_blocking();
-        new_batch->insert_idx = 0;
-        new_batch->sequence_number = m_sequence_number[chip_nr + 1]++;
-        return new_batch;
+    void insert_release(
+        Batch<uint64_t> *&batch,
+        es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> &queue,
+        uint64_t data) {
+        exchange_batch_on_full(batch, batch_pool, queue);
+        batch->data[batch->insert_idx++] = data;
     }
 
     void insert_hit(uint8_t chip_nr, uint64_t data) {
-        hit_batches[chip_nr]->data[hit_batches[chip_nr]->insert_idx++] = data;
-        if (hit_batches[chip_nr]->insert_idx >= BATCH_SIZE) {
-            while (not m_hit_queue.push(hit_batches[chip_nr])) {
-            }
-            hit_batches[chip_nr] = new_batch(hit_batches[chip_nr], chip_nr);
-        }
+        insert_release(hit_batches[chip_nr], m_hit_queue[chip_nr], data);
     }
     void insert_trigger(uint64_t data) {
-        trigger_batch->data[trigger_batch->insert_idx++] = data;
-        if (trigger_batch->insert_idx >= BATCH_SIZE) {
-            while (not m_trigger_queue.push(trigger_batch)) {
-            }
-            trigger_batch = new_batch(trigger_batch, 5);
-        }
+        insert_release(trigger_batch, m_trigger_queue, data);
     }
 
     BatchHandle() {
@@ -104,10 +71,9 @@ class BatchHandle {
 
 class Parser {
     BatchHandle m_batch_handle;
-    size_t m_sequence_number{0};
 
    public:
-    auto get_batch_pool() -> BatchHandle & { return m_batch_handle; }
+    auto get_batch_handle() -> BatchHandle & { return m_batch_handle; }
 
     void parse_header(tpx3_helper::Header t_header) {
         for (const auto *data_ptr = t_header.start; data_ptr < t_header.end;
@@ -133,10 +99,11 @@ class Parser {
     };
 
     int parse(MemoryMap &t_mmap) {
-        constexpr auto num_runs = 50;
-        auto now = std::chrono::high_resolution_clock::now();
-
-        for (size_t run = 0; run < num_runs; run++) {
+        std::chrono::high_resolution_clock::time_point start;
+        for (size_t run = 0; run < num_runs + 10; run++) {
+            if (run == 10) {
+                start = std::chrono::high_resolution_clock::now();
+            }
             const auto *running = t_mmap.begin();
             while (std::next(running) < t_mmap.end()) {
                 auto opt = tpx3_helper::parse_header(running);
@@ -152,16 +119,74 @@ class Parser {
             }
             std::cout << "Run " << run + 1 << " completed\n";
         }
-
         auto end = std::chrono::high_resolution_clock::now();
         std::cout << "Throughput: "
                   << std::distance(t_mmap.begin(), t_mmap.end()) / 1024.0 /
                          1024.0 / 1024.0 * 8 /
-                         std::chrono::duration<double>(end - now).count() *
+                         std::chrono::duration<double>(end - start).count() *
                          num_runs
                   << " GB/s" << std::endl;
         return 0;
     };
+};
+
+struct Compare_Hits {
+    bool operator()(const uint64_t &a, const uint64_t &b) const {
+        const auto a_toa = tpx3_helper::get_bits(a, 30, 43);
+        const auto b_toa = tpx3_helper::get_bits(b, 30, 43);
+        int32_t d = (int32_t)(((b_toa - a_toa) & 0x3FFF) << 18) >> 18;
+        return d < 0;
+    }
+};
+
+template <typename Compare>
+class Sort {
+    std::jthread m_thread;
+    es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> &m_hit_queue;
+    es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> &m_sorted_hit_queue;
+    SortingBuffer<uint64_t, 8, Compare> m_buffer;
+
+    Batch_Pool<Batch<uint64_t>, BATCH_POOL_SIZE> &m_batch_pool;
+    Batch<uint64_t> *m_current_batch;
+
+   public:
+    bool idle;
+
+    Sort(es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> &hit_queue,
+         es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE>
+             &sorted_hit_queue,
+         Batch_Pool<Batch<uint64_t>, BATCH_POOL_SIZE> &batch_pool)
+        : m_hit_queue(hit_queue),
+          m_sorted_hit_queue(sorted_hit_queue),
+          m_batch_pool(batch_pool) {
+        m_current_batch = m_batch_pool.acquire_batch_blocking();
+    }
+    void start_worker() {
+        m_thread = std::jthread([this](std::stop_token stop) {
+            Batch<uint64_t> *batch;
+            while (not stop.stop_requested()) {
+                if (m_hit_queue.pop(batch)) {
+                    idle = false;
+                    for (size_t i = 0; i < batch->insert_idx; ++i) {
+                        auto data = batch->data[i];
+                        auto sorted_data = m_buffer.pushpop(data);
+                        if (sorted_data.has_value()) {
+                            exchange_batch_on_full(m_current_batch,
+                                                   m_batch_pool,
+                                                   m_sorted_hit_queue);
+                            m_current_batch
+                                ->data[m_current_batch->insert_idx++] =
+                                sorted_data.value();
+                        }
+                    }
+                    m_batch_pool.release_batch_blocking(batch);
+                } else {
+                    idle = true;
+                }
+            }
+        });
+    }
+    void stop() { m_thread.request_stop(); }
 };
 
 class Hit_Consumer {
@@ -180,8 +205,6 @@ class Hit_Consumer {
                     auto hit = tpx3_helper::Hit(data);
                     asm volatile("" ::"g"(hit) : "memory");
                 }
-
-                batch->insert_idx = 0;
                 batch_pool.release_batch_blocking(batch);
             }
         }
@@ -200,26 +223,25 @@ class Trigger_Consumer {
 
    public:
     void operator()(
-        es::lockfree::mpmc_queue<Batch<uint64_t> *, BATCH_POOL_SIZE> &queue,
+        es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> &queue,
         Batch_Pool<Batch<uint64_t>, BATCH_POOL_SIZE> &batch_pool,
         std::stop_token stop) {
         Batch<uint64_t> *batch;
         while (not stop.stop_requested()) {
             if (queue.pop(batch)) {
-                for (size_t i = 0; i < batch->insert_idx; ++i) {
-                    auto data = batch->data[i];
-                    auto trigger = tpx3_helper::Trigger(data);
-                    asm volatile("" ::"g"(trigger) : "memory");
-                }
-
-                batch->insert_idx = 0;
+                // for (size_t i = 0; i < batch->insert_idx; ++i) {
+                //     // auto data = batch->data[i];
+                //     // auto trigger = tpx3_helper::Trigger(data);
+                //     // asm volatile("" ::"g"(trigger) : "memory");
+                // }
+                //
                 batch_pool.release_batch_blocking(batch);
+            } else {
             }
         }
     }
-    void start(
-        es::lockfree::mpmc_queue<Batch<uint64_t> *, BATCH_POOL_SIZE> &queue,
-        Batch_Pool<Batch<uint64_t>, BATCH_POOL_SIZE> &batch_pool) {
+    void start(es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> &queue,
+               Batch_Pool<Batch<uint64_t>, BATCH_POOL_SIZE> &batch_pool) {
         m_thread =
             std::jthread([this, &queue, &batch_pool](std::stop_token stop) {
                 (*this)(queue, batch_pool, stop);
@@ -229,21 +251,71 @@ class Trigger_Consumer {
 };
 
 int main() {
-    auto mmap = MemoryMap("./tpx3.tpx3");
     Parser parser;
 
-    std::array<Hit_Consumer, 2> hit_consumers;
-    for (size_t i = 0; i < hit_consumers.size(); ++i) {
-        hit_consumers[i].start(parser.get_batch_pool().m_hit_queue,
-                               parser.get_batch_pool().batch_pool);
-    }
-    std::array<Trigger_Consumer, 2> trigger_consumers;
-    for (size_t i = 0; i < trigger_consumers.size(); ++i) {
-        trigger_consumers[i].start(parser.get_batch_pool().m_trigger_queue,
-                                   parser.get_batch_pool().batch_pool);
+    es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> sorted_hit_queue[4];
+    std::array<std::unique_ptr<Sort<Compare_Hits>>, 4> sorters;
+    for (int chip = 0; chip < 4; ++chip) {
+        sorters[chip] = std::make_unique<Sort<Compare_Hits>>(
+            parser.get_batch_handle().m_hit_queue[chip], sorted_hit_queue[chip],
+            parser.get_batch_handle().batch_pool);
+        sorters[chip]->start_worker();
     }
 
-    parser.parse(mmap);
+    std::array<Hit_Consumer, 4> hit_consumers;
+    for (size_t i = 0; i < hit_consumers.size(); ++i) {
+        hit_consumers[i].start(sorted_hit_queue[i],
+                               parser.get_batch_handle().batch_pool);
+    }
+    std::array<Trigger_Consumer, 1> trigger_consumers;
+    for (size_t i = 0; i < trigger_consumers.size(); ++i) {
+        trigger_consumers[i].start(parser.get_batch_handle().m_trigger_queue,
+                                   parser.get_batch_handle().batch_pool);
+    }
+
+    std::future<void> future = std::async(std::launch::async, [&parser] {
+        auto mmap = MemoryMap("./tpx3.tpx3");
+        parser.parse(mmap);
+    });
+
+    while (not(future.wait_for(std::chrono::milliseconds(500)) ==
+               std::future_status::ready)) {
+        // const auto free_batches =
+        //     parser.get_batch_handle().batch_pool.m_free_batches.size();
+        // const auto trigger_queue_size =
+        //     parser.get_batch_handle().m_trigger_queue.size();
+        // const auto hit_queue_size0 =
+        //     parser.get_batch_handle().m_hit_queue[0].size();
+        // const auto hit_queue_size1 =
+        //     parser.get_batch_handle().m_hit_queue[1].size();
+        // const auto hit_queue_size2 =
+        //     parser.get_batch_handle().m_hit_queue[2].size();
+        // const auto hit_queue_size3 =
+        //     parser.get_batch_handle().m_hit_queue[3].size();
+        //
+        // const auto sorted_hit_queue_size0 = sorted_hit_queue[0].size();
+        // const auto sorted_hit_queue_size1 = sorted_hit_queue[1].size();
+        // const auto sorted_hit_queue_size2 = sorted_hit_queue[2].size();
+        // const auto sorted_hit_queue_size3 = sorted_hit_queue[3].size();
+        //
+        // const auto idle0 = sorters[0]->idle;
+        // const auto idle1 = sorters[1]->idle;
+        // const auto idle2 = sorters[2]->idle;
+        // const auto idle3 = sorters[3]->idle;
+        //
+        // std::cout << "Free batches: " << free_batches
+        //           << ", Trigger queue size: " << trigger_queue_size
+        //           << ", Hit queue sizes: [" << hit_queue_size0 << ", "
+        //           << hit_queue_size1 << ", " << hit_queue_size2 << ", "
+        //           << hit_queue_size3 << "]";
+        // std::cout << ", Sorted Hit queue sizes: [" << sorted_hit_queue_size0
+        //           << ", " << sorted_hit_queue_size1 << ", "
+        //           << sorted_hit_queue_size2 << ", " << sorted_hit_queue_size3
+        //           << "]";
+        // std::cout << ", Sorter idle: [" << idle0 << ", " << idle1 << ", "
+        //           << idle2 << ", " << idle3 << "]" << std::endl;
+        // std::cout << std::endl;
+    }
 
     for (auto &consumer : hit_consumers) {
         consumer.stop();
@@ -251,6 +323,9 @@ int main() {
     for (auto &consumer : trigger_consumers) {
         consumer.stop();
     }
+    // for (auto &sorter : sorters) {
+    //     sorter->stop();
+    // }
 
     return 0;
 }

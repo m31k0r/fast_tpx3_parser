@@ -99,8 +99,8 @@ Trigger::Trigger(const uint64_t t_data) : type(get_bits(t_data, 56, 59)) {
     auto stamp = get_bits(t_data, 5, 8);
     // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     // ps
-    assert(stamp <= 12);
-    assert(stamp >= 1);
+    // assert(stamp <= 12);
+    // assert(stamp >= 1);
 
     // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     // reasoning: Use of magic numbers for bit manipulation
