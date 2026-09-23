@@ -130,21 +130,12 @@ class Parser {
     };
 };
 
-struct Compare_Hits {
-    bool operator()(const uint64_t &a, const uint64_t &b) const {
-        const auto a_toa = tpx3_helper::get_bits(a, 30, 43);
-        const auto b_toa = tpx3_helper::get_bits(b, 30, 43);
-        int32_t d = (int32_t)(((b_toa - a_toa) & 0x3FFF) << 18) >> 18;
-        return d < 0;
-    }
-};
-
-template <typename Compare>
+template <typename Compare, size_t WINDOW_SIZE = 64>
 class Sort {
     std::jthread m_thread;
     es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> &m_hit_queue;
     es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> &m_sorted_hit_queue;
-    SortingBuffer<uint64_t, 8, Compare> m_buffer;
+    SortingBuffer<uint64_t, WINDOW_SIZE, Compare> m_buffer;
 
     Batch_Pool<Batch<uint64_t>, BATCH_POOL_SIZE> &m_batch_pool;
     Batch<uint64_t> *m_current_batch;
@@ -229,11 +220,11 @@ class Trigger_Consumer {
         Batch<uint64_t> *batch;
         while (not stop.stop_requested()) {
             if (queue.pop(batch)) {
-                // for (size_t i = 0; i < batch->insert_idx; ++i) {
-                //     // auto data = batch->data[i];
-                //     // auto trigger = tpx3_helper::Trigger(data);
-                //     // asm volatile("" ::"g"(trigger) : "memory");
-                // }
+                for (size_t i = 0; i < batch->insert_idx; ++i) {
+                    auto data = batch->data[i];
+                    auto trigger = tpx3_helper::Trigger(data);
+                    asm volatile("" ::"g"(trigger) : "memory");
+                }
                 //
                 batch_pool.release_batch_blocking(batch);
             } else {
@@ -254,13 +245,19 @@ int main() {
     Parser parser;
 
     es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> sorted_hit_queue[4];
-    std::array<std::unique_ptr<Sort<Compare_Hits>>, 4> sorters;
+    es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE>
+        sorted_trigger_queue;
+    std::array<std::unique_ptr<Sort<Compare_Hits, 8>>, 8> sorters;
     for (int chip = 0; chip < 4; ++chip) {
-        sorters[chip] = std::make_unique<Sort<Compare_Hits>>(
+        sorters[chip] = std::make_unique<Sort<Compare_Hits, 8>>(
             parser.get_batch_handle().m_hit_queue[chip], sorted_hit_queue[chip],
             parser.get_batch_handle().batch_pool);
         sorters[chip]->start_worker();
     }
+    Sort<Compare_Triggers, 8> trigger_sorter(
+        parser.get_batch_handle().m_trigger_queue, sorted_trigger_queue,
+        parser.get_batch_handle().batch_pool);
+    trigger_sorter.start_worker();
 
     std::array<Hit_Consumer, 4> hit_consumers;
     for (size_t i = 0; i < hit_consumers.size(); ++i) {
@@ -269,7 +266,7 @@ int main() {
     }
     std::array<Trigger_Consumer, 1> trigger_consumers;
     for (size_t i = 0; i < trigger_consumers.size(); ++i) {
-        trigger_consumers[i].start(parser.get_batch_handle().m_trigger_queue,
+        trigger_consumers[i].start(sorted_trigger_queue,
                                    parser.get_batch_handle().batch_pool);
     }
 
@@ -280,41 +277,6 @@ int main() {
 
     while (not(future.wait_for(std::chrono::milliseconds(500)) ==
                std::future_status::ready)) {
-        // const auto free_batches =
-        //     parser.get_batch_handle().batch_pool.m_free_batches.size();
-        // const auto trigger_queue_size =
-        //     parser.get_batch_handle().m_trigger_queue.size();
-        // const auto hit_queue_size0 =
-        //     parser.get_batch_handle().m_hit_queue[0].size();
-        // const auto hit_queue_size1 =
-        //     parser.get_batch_handle().m_hit_queue[1].size();
-        // const auto hit_queue_size2 =
-        //     parser.get_batch_handle().m_hit_queue[2].size();
-        // const auto hit_queue_size3 =
-        //     parser.get_batch_handle().m_hit_queue[3].size();
-        //
-        // const auto sorted_hit_queue_size0 = sorted_hit_queue[0].size();
-        // const auto sorted_hit_queue_size1 = sorted_hit_queue[1].size();
-        // const auto sorted_hit_queue_size2 = sorted_hit_queue[2].size();
-        // const auto sorted_hit_queue_size3 = sorted_hit_queue[3].size();
-        //
-        // const auto idle0 = sorters[0]->idle;
-        // const auto idle1 = sorters[1]->idle;
-        // const auto idle2 = sorters[2]->idle;
-        // const auto idle3 = sorters[3]->idle;
-        //
-        // std::cout << "Free batches: " << free_batches
-        //           << ", Trigger queue size: " << trigger_queue_size
-        //           << ", Hit queue sizes: [" << hit_queue_size0 << ", "
-        //           << hit_queue_size1 << ", " << hit_queue_size2 << ", "
-        //           << hit_queue_size3 << "]";
-        // std::cout << ", Sorted Hit queue sizes: [" << sorted_hit_queue_size0
-        //           << ", " << sorted_hit_queue_size1 << ", "
-        //           << sorted_hit_queue_size2 << ", " << sorted_hit_queue_size3
-        //           << "]";
-        // std::cout << ", Sorter idle: [" << idle0 << ", " << idle1 << ", "
-        //           << idle2 << ", " << idle3 << "]" << std::endl;
-        // std::cout << std::endl;
     }
 
     for (auto &consumer : hit_consumers) {
@@ -323,9 +285,9 @@ int main() {
     for (auto &consumer : trigger_consumers) {
         consumer.stop();
     }
-    // for (auto &sorter : sorters) {
-    //     sorter->stop();
-    // }
+    for (auto &sorter : sorters) {
+        sorter->stop();
+    }
 
     return 0;
 }
