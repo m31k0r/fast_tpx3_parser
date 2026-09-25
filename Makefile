@@ -12,7 +12,7 @@ SRC_EXT = cpp
 # code lists #
 # Find all source files in the source directory, sorted by
 # most recently modified
-SOURCES = src/main.cpp src/Rotation.cpp src/Memory_Map.cpp src/tpx3_helper.cpp
+SOURCES = src/benchmark.cpp src/main.cpp src/Rotation.cpp src/Memory_Map.cpp src/tpx3_helper.cpp
 # Set the object file names, with the source directory stripped
 # from the path, and the build path prepended in its place
 OBJECTS = $(SOURCES:$(SRC_PATH)/%.$(SRC_EXT)=$(BUILD_PATH)/%.o)
@@ -20,10 +20,10 @@ OBJECTS = $(SOURCES:$(SRC_PATH)/%.$(SRC_EXT)=$(BUILD_PATH)/%.o)
 DEPS = $(OBJECTS:.o=.d)
 
 # flags #
-COMPILE_FLAGS = -std=c++20 -Wall -Wextra -g -O3 -mcx16 -march=native 
+COMPILE_FLAGS = -std=c++20 -Wall -Wextra -g -O3 -mcx16 -march=native --define pfm=1
 INCLUDES = -I include/ -I /usr/local/include
 # Space-separated pkg-config libraries used by this project
-LIBS =
+LIBS = -lbenchmark -lpthread -lpfm
 
 .PHONY: default_target
 default_target: release
