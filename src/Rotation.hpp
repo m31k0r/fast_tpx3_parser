@@ -15,7 +15,6 @@ struct Rotation {
         constexpr size_t max_pix = 255;
         return {(A * max_pix) + (B * t_x) + (C * t_y),
                 (D * max_pix) + (E * t_x) + (F * t_y)};
-        // FIXME: Rotation is camera insensitive
     }
     static Rotation from_string(const std::string &t_orientation);
 };
