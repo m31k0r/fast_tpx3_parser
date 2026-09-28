@@ -16,11 +16,11 @@ class Hit_Consumer {
         Batch<uint64_t> *batch;
         while (not stop.stop_requested()) {
             if (queue.pop(batch)) {
-                for (size_t i = 0; i < batch->insert_idx; ++i) {
-                    auto data = batch->data[i];
-                    auto hit = tpx3_helper::Hit(data);
-                    asm volatile("" ::"g"(hit) : "memory");
-                }
+                // for (size_t i = 0; i < batch->insert_idx; ++i) {
+                //     auto data = batch->data[i];
+                //     auto hit = tpx3_helper::Hit(data);
+                //     asm volatile("" ::"g"(hit) : "memory");
+                // }
                 batch_pool.release_batch_blocking(batch);
             }
         }
@@ -34,6 +34,7 @@ class Hit_Consumer {
     }
     void stop() { m_thread.request_stop(); }
 };
+
 class Trigger_Consumer {
     std::jthread m_thread;
 
@@ -45,14 +46,13 @@ class Trigger_Consumer {
         Batch<uint64_t> *batch;
         while (not stop.stop_requested()) {
             if (queue.pop(batch)) {
-                for (size_t i = 0; i < batch->insert_idx; ++i) {
-                    auto data = batch->data[i];
-                    auto trigger = tpx3_helper::Trigger(data);
-                    asm volatile("" ::"g"(trigger) : "memory");
-                }
+                // for (size_t i = 0; i < batch->insert_idx; ++i) {
+                //     auto data = batch->data[i];
+                //     auto trigger = tpx3_helper::Trigger(data);
+                //     asm volatile("" ::"g"(trigger) : "memory");
+                // }
                 //
                 batch_pool.release_batch_blocking(batch);
-            } else {
             }
         }
     }

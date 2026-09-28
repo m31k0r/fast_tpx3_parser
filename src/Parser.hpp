@@ -21,6 +21,7 @@ class BatchHandle {
         uint64_t data) {
         exchange_batch_on_full(batch, batch_pool, queue);
         batch->data[batch->insert_idx++] = data;
+        asm volatile("" ::"g"(batch->data[batch->insert_idx]) : "memory");
     }
 
     void insert_hit(uint8_t chip_nr, uint64_t data) {
@@ -68,8 +69,6 @@ class Parser {
     };
 
     int parse(MemoryMap &t_mmap) {
-        std::chrono::high_resolution_clock::time_point start;
-        start = std::chrono::high_resolution_clock::now();
         for (size_t run = 0; run < num_runs; run++) {
             const auto *running = t_mmap.begin();
             while (std::next(running) < t_mmap.end()) {
@@ -85,13 +84,6 @@ class Parser {
                 parse_header(header);
             }
         }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::cout << "Throughput: "
-                  << std::distance(t_mmap.begin(), t_mmap.end()) / 1024.0 /
-                         1024.0 / 1024.0 * 8 /
-                         std::chrono::duration<double>(end - start).count() *
-                         num_runs
-                  << " GB/s" << std::endl;
         return 0;
     };
 };
