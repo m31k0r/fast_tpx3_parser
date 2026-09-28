@@ -4,12 +4,13 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include "optional.hpp"
 #include "tpx3_helper.hpp"
 
 template <typename T, std::size_t Capacity, typename Compare = std::less<T>>
 class SortingBuffer {
    public:
-    std::optional<T> pushpop(T value) {
+    stdx::optional<T> pushpop(T value) {
         const auto toa = comp.get_toa(value);
 
         int pos = static_cast<int>(std::min(size_, Capacity)) - 1;
@@ -28,7 +29,7 @@ class SortingBuffer {
 
             m_buffer[pos - 1] = {value, toa};
 
-            return ret;
+            return stdx::optional<T>{ret};
         }
 
         for (std::size_t i = size_; i > static_cast<std::size_t>(pos); --i)
@@ -37,7 +38,7 @@ class SortingBuffer {
         m_buffer[pos] = {value, toa};
         ++size_;
 
-        return std::nullopt;
+        return stdx::optional<T>{std::nullopt};
     }
 
    private:
