@@ -8,6 +8,7 @@ template <typename T>
 struct Batch {
     std::array<T, BATCH_SIZE> data{};
     size_t insert_idx{0};
+    size_t sequence_number{0};
     std::atomic<bool> in_use{false};
 };
 
