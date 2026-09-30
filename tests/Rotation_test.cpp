@@ -13,7 +13,6 @@ TEST(RotationTest, Constructing) {
     };
     EXPECT_THROW(Rotation::from_string("invalid"), std::runtime_error);
 }
-#include <gtest/gtest.h>
 
 TEST(RotationTest, Corners) {
     constexpr uint16_t M = 255;
