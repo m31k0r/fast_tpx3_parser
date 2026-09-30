@@ -1,6 +1,7 @@
 #include <benchmark/benchmark.h>
 #include <algorithm>
 #include <vector>
+#include "Compare.hpp"
 #include "Memory_Map.hpp"
 #include "Parser.hpp"
 #include "Sink.hpp"
