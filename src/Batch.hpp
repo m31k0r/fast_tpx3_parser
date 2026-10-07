@@ -17,8 +17,10 @@ void exchange_batch_on_full(
     Batch *&batch, Batch_Pool<Batch, BATCH_POOL_SIZE> &batch_pool,
     es::lockfree::mpmc_queue<Batch *, QUEUE_SIZE> &queue) {
     if (batch->insert_idx >= BATCH_SIZE) {
+        const auto new_seq_nr = batch->sequence_number + 1;
         while (not queue.push(batch)) {
         }
         batch = batch_pool.acquire_batch_blocking();
+        batch->sequence_number = new_seq_nr;
     }
 }

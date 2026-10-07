@@ -1,5 +1,4 @@
 #pragma once
-#include <chrono>
 #include <cstdint>
 #include "Batch.hpp"
 #include "Constants.hpp"

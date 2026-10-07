@@ -25,14 +25,13 @@ TEST(MergingBuffer, Constructing) {
         const auto queue = rand() % 4;
         auto ba = pool.acquire_batch_blocking();
         ba->sequence_number = sequence_nr++;
-        while (not m_in_queue[queue].push(ba)) {
+        while (not m_in_queue[queue].push(std::move(ba))) {
         }
     }
     sequence_nr = 0;
     for (int i = 0; i < NUM_BATCHES; ++i) {
         auto ba = merger.next_batch();
         ASSERT_EQ(sequence_nr++, ba->sequence_number);
-        pool.release_batch_blocking(ba);
     }
 }
 }  // namespace

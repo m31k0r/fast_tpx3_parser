@@ -7,13 +7,23 @@
 
 template <typename Batch, size_t BATCH_POOL_SIZE>
 class Batch_Pool {
+    struct Deleter {
+        Batch_Pool *pool;
+
+        void operator()(Batch *batch) const noexcept {
+            pool->release_batch_blocking(batch);
+        }
+    };
+
+    void release_batch_blocking(Batch *t_batch);
+
    public:
+    using BatchPtr = std::unique_ptr<Batch, Deleter>;
     std::array<std::unique_ptr<Batch>, BATCH_POOL_SIZE> m_batches;
     es::lockfree::mpmc_queue<Batch *, BATCH_POOL_SIZE> m_free_batches;
 
     Batch_Pool();
-    Batch *acquire_batch_blocking();
-    void release_batch_blocking(Batch *t_batch);
+    std::unique_ptr<Batch, Deleter> acquire_batch_blocking();
 
     size_t available_batches();
 };
@@ -28,7 +38,8 @@ Batch_Pool<Batch, BATCH_POOL_SIZE>::Batch_Pool() {
 }
 
 template <typename Batch, size_t BATCH_POOL_SIZE>
-Batch *Batch_Pool<Batch, BATCH_POOL_SIZE>::acquire_batch_blocking() {
+Batch_Pool<Batch, BATCH_POOL_SIZE>::BatchPtr
+Batch_Pool<Batch, BATCH_POOL_SIZE>::acquire_batch_blocking() {
     Batch *batch = nullptr;
     while (not m_free_batches.pop(batch)) {
         //            std::this_thread::sleep_for(std::chrono::nanooseconds(10));
@@ -41,7 +52,7 @@ Batch *Batch_Pool<Batch, BATCH_POOL_SIZE>::acquire_batch_blocking() {
     }
 
     batch->insert_idx = 0;
-    return batch;
+    return BatchPtr(batch);
 }
 template <typename Batch, size_t BATCH_POOL_SIZE>
 void Batch_Pool<Batch, BATCH_POOL_SIZE>::release_batch_blocking(

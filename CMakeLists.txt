@@ -23,7 +23,7 @@ find_package(flux CONFIG REQUIRED)
 # ---------------------------------------------------------------------------
 
 add_library(mylib
-src/Rotation.cpp src/Memory_Map.cpp src/tpx3_helper.cpp
+src/Rotation.cpp src/Memory_Map.cpp src/tpx3_helper.cpp src/Queue_Status.cpp
 )
 
 target_include_directories(mylib
