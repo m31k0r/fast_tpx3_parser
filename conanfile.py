@@ -8,11 +8,7 @@ class MyProject(ConanFile):
 
     settings = "os", "arch", "compiler", "build_type"
 
-    requires = (
-        "gtest/1.17.0",
-        "benchmark/1.9.4",
-        "flux/0.4.0",
-    )
+    requires = ("catch2/3.16.0", "benchmark/1.9.4", "flux/0.4.0", "libassert/2.2.1")
 
     generators = (
         CMakeDeps,

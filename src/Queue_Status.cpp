@@ -1,11 +1,12 @@
 #include "Queue_Status.hpp"
 #include <print>
 #include <ranges>
+#include "Batch.hpp"
 #include "Constants.hpp"
+#include "MPMCQueue.h"
 
-void print_queue_status(
-    const es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> *queue,
-    std::string_view queue_name) {
+void print_queue_status(const rigtorp::MPMCQueue<U64BatchPtr> *queue,
+                        std::string_view queue_name) {
     std::println("Queue {} has {}/{} elements", queue_name, queue->size(),
                  QUEUE_SIZE);
 }
@@ -21,8 +22,7 @@ void Queue_State_Printer::run() {
     }
 }
 Queue_State_Printer::Queue_State_Printer(
-    const std::vector<es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> *>
-        &queues,
+    const std::vector<rigtorp::MPMCQueue<U64BatchPtr> *> &queues,
     std::vector<std::string> queue_names, std::chrono::milliseconds interval)
     : m_queues(queues),
       m_thread(&Queue_State_Printer::run, this),

@@ -1,20 +1,21 @@
 
 #include "Rotation.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <stdexcept>
 #include "gtest/gtest.h"
 
 namespace {
-TEST(RotationTest, Constructing) {
+TEST_CASE("Rotation from string") {
     std::array<std::string, 8> rots = {"LtRBtT", "TtBLtR", "RtLTtB", "BtTLtR",
                                        "RtLBtT", "TtBRtL", "LtRTtB", "BtTRtL"};
     for (auto r : rots) {
         auto rot = Rotation::from_string(r);
     };
-    EXPECT_THROW(Rotation::from_string("invalid"), std::runtime_error);
+    REQUIRE_THROWS_AS(Rotation::from_string("invalid"), std::runtime_error);
 }
 
-TEST(RotationTest, Corners) {
+TEST_CASE("Rotation corner transformation") {
     constexpr uint16_t M = 255;
 
     const std::array<std::pair<uint16_t, uint16_t>, 4> corners = {{
@@ -90,15 +91,13 @@ TEST(RotationTest, Corners) {
     for (const auto& test : tests) {
         const auto rotation = Rotation::from_string(test.orientation);
 
-        SCOPED_TRACE("rotation: " + test.orientation);
+        CAPTURE("rotation: " + test.orientation);
 
         for (size_t i = 0; i < corners.size(); ++i) {
             const auto [x, y] = corners[i];
             const auto actual = rotation.rotate(x, y);
 
-            EXPECT_EQ(actual, test.expected[i])
-                << "corner index: " << i << ", input: (" << x << ", " << y
-                << ")";
+            REQUIRE(actual == test.expected[i]);
         }
     }
 }

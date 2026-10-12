@@ -3,38 +3,49 @@
 #include "Batch.hpp"
 #include "Compare.hpp"
 #include "Constants.hpp"
-#include "mpmc_queue.h"
+#include "QueueConcepts.hpp"
+#include "SPSCQueue.h"
+
+#include <iostream>
+#include <print>
 
 namespace detail {
-using BA = Batch<uint64_t>;
 struct Comp {
     int check;
-    bool operator()(BA *batch, auto a) const {
-        return batch->sequence_number == check;
+    bool operator()(U64BatchPtr *batch) const {
+        bool is_valid = batch->get()->sequence_number == check;
+        if (not is_valid)
+            std::println("Looking for seq nr: {} but found {}", check,
+                         batch->get()->sequence_number);
+        return is_valid;
     };
 };
 }  // namespace detail
 
-template <typename COMPARE, size_t NUMBER_OF_QUEUES = 2, size_t SORT_LENGTH = 2>
+template <typename InQueue, typename OutQueue, typename COMPARE,
+          size_t NUMBER_OF_QUEUES = 2, size_t SORT_LENGTH = 2>
+    requires SCQueueable<InQueue, U64BatchPtr> &&
+             InQueueable<OutQueue, U64BatchPtr>
 class Merger {
-    using BA = Batch<uint64_t>;
-    std::array<es::lockfree::mpmc_queue<BA *, QUEUE_SIZE> *, NUMBER_OF_QUEUES>
-        m_queue;
-    es::lockfree::mpmc_queue<BA *, QUEUE_SIZE> *m_output_queue;
-    BA *last_batch = nullptr;
+    std::array<InQueue *, NUMBER_OF_QUEUES> m_queue;
+    OutQueue &m_output_queue;
+    U64BatchPtr last_batch = nullptr;
     size_t m_sequence_number = 0;
 
    public:
-    BA *next_batch() {
+    U64BatchPtr next_batch() {
         const detail::Comp comp(m_sequence_number);
         bool all_non_empty = true;
         for (auto &queue : m_queue) {
-            if (queue->empty()) {
+            auto front = queue->front();
+            if (not front) {
                 all_non_empty = false;
+                continue;
             }
-            BA *batch;
-            auto valid_pop = queue->pop_if(comp, batch);
-            if (valid_pop) {
+
+            if (front->get()->sequence_number == m_sequence_number) {
+                U64BatchPtr batch = std::move(*front);
+                queue->pop();
                 m_sequence_number++;
                 return batch;
             }
@@ -47,21 +58,19 @@ class Merger {
         return nullptr;
     }
 
-    Merger(const std::array<es::lockfree::mpmc_queue<BA *, QUEUE_SIZE> *,
-                            NUMBER_OF_QUEUES> &queues,
-           es::lockfree::mpmc_queue<BA *, QUEUE_SIZE> *output_queue)
-        : m_output_queue(output_queue) {
-        m_queue = queues;
-    }
+    Merger(const std::array<InQueue *, NUMBER_OF_QUEUES> &queues,
+           OutQueue &output_queue)
+        : m_output_queue(output_queue), m_queue(queues) {}
 
     void startup() {
         auto first_batch = next_batch();
         while (first_batch == nullptr) {
             first_batch = next_batch();
         }
-        last_batch = first_batch;
+        last_batch = std::move(first_batch);
     }
-    void sort_head_tail(BA *old_batch, BA *new_batch) {
+    void sort_head_tail(Batch<uint64_t> *old_batch,
+                        Batch<uint64_t> *new_batch) {
         uint64_t temp[SORT_LENGTH * 2];
         for (size_t i = 0; i < SORT_LENGTH; ++i) {
             temp[i] = old_batch->data[BATCH_SIZE - SORT_LENGTH + i];
@@ -76,16 +85,16 @@ class Merger {
         }
     }
     void step() {
-        BA *new_batch = next_batch();
+        auto new_batch = next_batch();
         if (new_batch == nullptr) {
             return;
         }
-        sort_head_tail(last_batch, new_batch);
-        while (not m_output_queue->push(last_batch)) {
+        sort_head_tail(last_batch.get(), new_batch.get());
+        while (not m_output_queue->try_push(std::move(last_batch))) {
             std::cout << "Output queue full, waiting to push batch with "
                          "sequence number "
                       << last_batch->sequence_number << std::endl;
         }
-        last_batch = new_batch;
+        last_batch = std::move(new_batch);
     }
 };

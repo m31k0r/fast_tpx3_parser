@@ -2,11 +2,10 @@
 #include <chrono>
 #include <thread>
 #include "Batch.hpp"
-#include "mpmc_queue.h"
+#include "MPMCQueue.h"
 
 class Queue_State_Printer {
-    std::vector<es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> *>
-        m_queues;
+    std::vector<rigtorp::MPMCQueue<U64BatchPtr> *> m_queues;
     std::vector<std::string> m_queue_names;
 
     std::jthread m_thread;
@@ -15,8 +14,7 @@ class Queue_State_Printer {
 
    public:
     Queue_State_Printer(
-        const std::vector<
-            es::lockfree::mpmc_queue<Batch<uint64_t> *, QUEUE_SIZE> *> &queues,
+        const std::vector<rigtorp::MPMCQueue<U64BatchPtr> *> &queues,
         std::vector<std::string> queue_names = {},
         std::chrono::milliseconds interval = std::chrono::milliseconds(1000));
 };

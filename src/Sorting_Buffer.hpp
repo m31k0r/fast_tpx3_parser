@@ -10,6 +10,7 @@ template <typename T, std::size_t Capacity, typename Compare = std::less<T>>
 class SortingBuffer {
    public:
     stdx::optional<T> pushpop(T value) {
+        static_assert(Capacity > 1, "Capacity must be atleast 2");
         const auto toa = comp.get_toa(value);
 
         int pos = static_cast<int>(std::min(size_, Capacity)) - 1;
