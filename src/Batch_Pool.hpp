@@ -1,14 +1,8 @@
 #pragma once
 #include <cassert>
-#include <chrono>
-#include <cstdint>
-#include <fstream>
-#include <iostream>
 #include <libassert/assert.hpp>
 #include <memory>
-#include <thread>
 #include <vector>
-#include "Constants.hpp"
 #include "MPMCQueue.h"
 
 template <typename Batch>
@@ -51,7 +45,7 @@ Batch_Pool<Batch>::~Batch_Pool() {
 
 template <typename Batch>
 Batch_Pool<Batch>::Batch_Pool(size_t capacity)
-    : m_free_batches(capacity), m_batches(capacity) {
+    : m_batches(capacity), m_free_batches(capacity) {
     for (size_t i = 0; i < capacity; ++i) {
         auto batch = std::make_unique<Batch>();
         m_free_batches.push(batch.get());

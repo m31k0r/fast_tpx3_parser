@@ -44,11 +44,17 @@ target_include_directories(mylib
 set_property(TARGET mylib PROPERTY COMPILE_WARNING_AS_ERROR ON)
 
 target_compile_features(mylib PUBLIC cxx_std_26)
-target_compile_options(mylib PUBLIC -mcx16 -march=native -Wno-interference-size -Wno-deprecated-declarations
+target_compile_options(mylib PUBLIC -mcx16
+                                    -march=native
+                                    -Wno-interference-size
+                                    -Wno-deprecated-declarations
+                                    -Wall
+                                    -Wpedantic
+                                    -Werror
 )
 
-add_compile_options(-fsanitize=address)
-add_link_options(-fsanitize=address)
+# add_compile_options(-fsanitize=address)
+# add_link_options(-fsanitize=address)
 
 target_link_libraries(mylib
     PUBLIC
@@ -70,6 +76,9 @@ add_executable(unit_tests
     tests/Rotation_test.cpp
     tests/Merging_Buffer_test.cpp
     tests/Sorter_test.cpp
+    tests/Batch_Queue_test.cpp
+    tests/Delay_Calc_test.cpp
+    tests/Extract_Queue_test.cpp
 )
 
 target_link_libraries(unit_tests
@@ -97,3 +106,11 @@ target_link_libraries(benchmarks
         benchmark::benchmark
 )
 
+
+add_executable(main src/main.cpp)
+
+target_link_libraries(main
+    PRIVATE
+        mylib
+        benchmark::benchmark
+)

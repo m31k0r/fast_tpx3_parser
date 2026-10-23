@@ -1,11 +1,6 @@
-#include <memory>
 #include <thread>
 #include "Batch.hpp"
-#include "Batch_Pool.hpp"
-#include "Constants.hpp"
-#include "Merging_Buffer.hpp"
 #include "QueueConcepts.hpp"
-#include "tpx3_helper.hpp"
 
 template <typename Queue>
 class Sink {
@@ -19,6 +14,7 @@ class Sink {
         requires MCQueueable<Queue, U64BatchPtr>;
     void start(Queue &queue) {
         m_thread = std::jthread([this, &queue](std::stop_token stop) {
+            pthread_setname_np(pthread_self(), "Sink");
             while (not stop.stop_requested()) {
                 (*this)(queue);
             }

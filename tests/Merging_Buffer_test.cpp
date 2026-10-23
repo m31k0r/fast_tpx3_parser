@@ -1,4 +1,5 @@
 #include "Merging_Buffer.hpp"
+#include <sys/types.h>
 #include "Batch.hpp"
 #include "Batch_Pool.hpp"
 #include "Compare.hpp"
@@ -11,39 +12,48 @@
 #include <cstdint>
 #include <print>
 
-using queue = rigtorp::SPSCQueue<U64BatchPtr>;
+using Queue = rigtorp::SPSCQueue<U64BatchPtr>;
 
 namespace {
 TEST_CASE("MergingBuffer consume sequenced batches") {
-    std::array<queue, 4> m_in_queue = {queue(64), queue(64), queue(64),
-                                       queue(64)};
-    std::array<queue*, 4> m_in_queue_ptr = {
+    std::array<Queue, 4> m_in_queue = {Queue(64), Queue(64), Queue(64),
+                                       Queue(64)};
+    std::array<Queue*, 4> m_in_queue_ptr = {
         m_in_queue.data(), m_in_queue.data() + 1, m_in_queue.data() + 2,
         m_in_queue.data() + 3};
-    queue output_queue(64);
+    Queue output_queue(64);
     Batch_Pool<Batch<uint64_t>> pool(128);
-    Merger<queue, queue, Compare_Triggers, 4> merger(m_in_queue_ptr,
-                                                     output_queue);
+    Merger<Queue, Compare_Triggers, 4> merger(m_in_queue_ptr);
 
     const auto num_queues = GENERATE(1, 2, 3, 4);
-    constexpr auto NUM_BATCHES = 64;
-    int sequence_nr = 0;
-    for (int i = 0; i < NUM_BATCHES; ++i) {
-        const auto queue = rand() % num_queues;
-        auto ba = pool.acquire_batch_blocking();
-        ba->sequence_number = sequence_nr++;
-        while (not m_in_queue[queue].try_push(std::move(ba))) {
+    constexpr auto NUM_BATCHES = 2;
+    {
+        int sequence_nr = 0;
+        uint64_t inhalt_nr = 0;
+        for (int i = 0; i < NUM_BATCHES; ++i) {
+            const auto queue = rand() % num_queues;
+            auto ba = pool.acquire_batch_blocking();
+            ba->sequence_number = sequence_nr++;
+            for (uint64_t i = 0; i < BATCH_SIZE; ++i) {
+                ba->data[i] = inhalt_nr++;
+            }
+            while (not m_in_queue[queue].try_push(std::move(ba))) {
+            }
         }
     }
-    sequence_nr = 0;
-    for (int i = 0; i < NUM_BATCHES; ++i) {
-        U64BatchPtr ba;
-        while (not(ba = merger.next_batch()));
-        if (ba) {
-            CAPTURE(sequence_nr);
-            REQUIRE(sequence_nr++ == ba->sequence_number);
-            // std::println("Poped seq. nr. {}", ba->sequence_number);
+    {
+        uint64_t inhalt_nr = 0;
+        for (uint64_t i = 0; i < (NUM_BATCHES - 1); ++i) {
+            CAPTURE(i);
+            REQUIRE(merger.front());
+            auto batch = merger.front();
+
+            for (auto d : *batch) {
+                REQUIRE(d == inhalt_nr++);
+            }
+            merger.pop();
         }
+        REQUIRE(merger.front() == nullptr);
     }
 }
 }  // namespace

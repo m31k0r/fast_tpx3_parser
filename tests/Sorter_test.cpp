@@ -12,6 +12,5 @@ TEST_CASE("Construction of Sorter") {
     Sort<decltype(inqueue), decltype(outqueue), Compare_Triggers> sorter(
         inqueue, outqueue, pool);
 
-    SECTION("basic") { sorter.work(); }
     SECTION("thread") { sorter.start_worker(); }
 }

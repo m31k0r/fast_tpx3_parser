@@ -41,6 +41,19 @@ class SortingBuffer {
         return stdx::optional<T>{std::nullopt};
     }
 
+    stdx::optional<T> pop() {
+        if (size_ == 0) return stdx::optional<T>(std::nullopt);
+
+        T ret = std::move(m_buffer[0].value);
+
+        for (std::size_t i = 0; i + 1 < size_; ++i)
+            m_buffer[i] = std::move(m_buffer[i + 1]);
+
+        --size_;
+
+        return stdx::optional<T>{ret};
+    }
+
    private:
     struct timed {
         T value;
