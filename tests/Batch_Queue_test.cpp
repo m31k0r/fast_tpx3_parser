@@ -17,7 +17,7 @@ using Queue = rigtorp::SPSCQueue<U64BatchPtr>;
 namespace {
 TEST_CASE("BatchQueue to single Queue") {
     Queue input_queue(64);
-    Batch_Pool<Batch<uint64_t>> pool(128);
+    Batch_Pool<U64Batch> pool(128);
     BatchQueue<Queue> batch(input_queue);
 
     constexpr auto NUM_BATCHES = 64;

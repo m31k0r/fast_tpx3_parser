@@ -92,7 +92,7 @@ Hit::Hit(const uint64_t t_data) {
 }
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-Trigger::Trigger(const uint64_t t_data) : type(get_bits(t_data, 56, 59)) {
+Trigger::Trigger(const uint64_t t_data) {
     /* trigger.timestep = get_bits(data, 9, 43); */
     auto timestep = get_bits(t_data, 9, 43);
     // trigger.counter = get_bits(t_data, 44, 55);
@@ -105,11 +105,15 @@ Trigger::Trigger(const uint64_t t_data) : type(get_bits(t_data, 56, 59)) {
     // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     // reasoning: Use of magic numbers for bit manipulation
     auto count = ((timestep * 12) + stamp - 1);
-    this->toa = (count * 260) + (count * 5 / 12);
+    const auto toa = (count * 260) + (count * 5 / 12);
+    const auto type = get_bits(t_data, 56, 59);
+    pack(type, toa);
     // static_cast<uint64_t>(
     //     (0.4166666666666 * static_cast<double>(count)));  // copied
 }
-std::string Trigger::to_string() const { return trigger_type_to_string(type); }
+std::string Trigger::to_string() const {
+    return trigger_type_to_string(get_type());
+}
 std::string trigger_type_to_string(uint8_t t_type) {
     switch (t_type) {
         case 0xf:
@@ -134,10 +138,6 @@ uint64_t parse_frame(const byte_t t_frame) {
     // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     return clock;
 };
-void TriggerEval::merge(const TriggerEval &t_other) {
-    toas.insert(toas.end(), t_other.toas.begin(), t_other.toas.end());
-}
-void TriggerEval::clear() { toas.clear(); }
 uint8_t get_byte(const byte_t t_data, const int t_byte) {
     // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,
     // readability-magic-numbers)

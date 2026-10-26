@@ -19,6 +19,7 @@ class Sink {
                 (*this)(queue);
             }
         });
+        std::cout << "Sink is running on queue: " << &queue << std::endl;
     }
 };
 template <typename Queue>

@@ -1,5 +1,6 @@
 #pragma once
 #include <cassert>
+#include <iostream>
 #include <libassert/assert.hpp>
 #include <memory>
 #include <vector>
@@ -59,9 +60,10 @@ Batch_Pool<Batch>::acquire_batch_blocking() {
     Batch *batch = nullptr;
     while (not m_free_batches.try_pop(batch)) {
         //            std::this_thread::sleep_for(std::chrono::nanooseconds(10));
+        std::cerr << "No free batches this should not happen";
     }
     DEBUG_ASSERT(batch, "should not pop a null batch");
-    batch->insert_idx = 0;
+    batch->size = 0;
     return BatchPtr(batch, Deleter{this});
 }
 template <typename Batch>

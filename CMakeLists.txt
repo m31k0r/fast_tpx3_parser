@@ -79,6 +79,7 @@ add_executable(unit_tests
     tests/Batch_Queue_test.cpp
     tests/Delay_Calc_test.cpp
     tests/Extract_Queue_test.cpp
+    tests/tpx3_helper_test.cpp
 )
 
 target_link_libraries(unit_tests

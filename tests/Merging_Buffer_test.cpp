@@ -22,7 +22,7 @@ TEST_CASE("MergingBuffer consume sequenced batches") {
         m_in_queue.data(), m_in_queue.data() + 1, m_in_queue.data() + 2,
         m_in_queue.data() + 3};
     Queue output_queue(64);
-    Batch_Pool<Batch<uint64_t>> pool(128);
+    Batch_Pool<U64Batch> pool(128);
     Merger<Queue, Compare_Triggers, 4> merger(m_in_queue_ptr);
 
     const auto num_queues = GENERATE(1, 2, 3, 4);

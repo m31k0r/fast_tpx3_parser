@@ -63,7 +63,7 @@ class Merger {
         return nullptr;
     }
 
-    void sort_head_tail(Batch<uint64_t> *new_batch) {
+    void sort_head_tail(U64Batch *new_batch) {
         DEBUG_ASSERT(buffer_[0]);
         std::merge(new_batch->begin(), new_batch->end(),
                    buffer_.begin() + BATCH_SIZE, buffer_.end(),
@@ -94,7 +94,7 @@ class Merger {
     Merger(const std::array<InQueue *, NUMBER_OF_QUEUES> &queues)
         : m_queue(queues) {}
 
-    Batch<uint64_t> *front() {
+    U64Batch *front() {
         if (not current_batch) {
             current_batch = get_batch();
         }

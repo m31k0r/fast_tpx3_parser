@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <libassert/assert.hpp>
 #include <thread>
 
@@ -7,7 +8,7 @@
 #include "QueueConcepts.hpp"
 #include "Sorting_Buffer.hpp"
 
-template <typename InQueue, typename OutQueue, typename Compare>
+template <typename InQueue, typename OutQueue, class Compare>
     requires MCQueueable<InQueue, U64BatchPtr> &&
              SCQueueable<OutQueue, U64BatchPtr>
 class Sort {
@@ -18,7 +19,7 @@ class Sort {
 
    public:
     Sort(InQueue &input_queue, OutQueue &output_queue,
-         Batch_Pool<Batch<uint64_t>> &batch_pool)
+         Batch_Pool<U64Batch> &batch_pool)
         : m_hit_queue(input_queue), m_sorted_hit_queue(output_queue) {
         DEBUG_ASSERT(m_current_batch);
     }
@@ -32,6 +33,8 @@ class Sort {
                     DEBUG_ASSERT(batch);
 
                     std::sort(batch->begin(), batch->end(), Compare());
+                    // std::for_each(batch->begin(), batch->end(), Parse());
+
                     while (not m_sorted_hit_queue.try_push(std::move(batch))) {
                         if (stop.stop_requested()) {
                             return;

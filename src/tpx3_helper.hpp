@@ -29,15 +29,23 @@ enum class Status : std::uint8_t {
 
 using byte_t = uint64_t;
 struct Trigger {
-    uint64_t toa{};
-    uint64_t delay = 0;
-    uint8_t type{};
+    uint64_t packed{};
     Trigger(uint64_t t_data);
     Trigger() = default;
 
-   private:
     std::string to_string() const;
-    [[nodiscard]] uint64_t get_toa() const;
+    [[nodiscard]] uint64_t get_toa() const {
+        const auto toa = packed >> 8;
+        return toa;
+    };
+    [[nodiscard]] uint8_t get_type() const {
+        const uint8_t type = packed;
+        return type;
+    };
+    [[nodiscard]] std::pair<uint8_t, uint64_t> unpack() {
+        return {get_type(), get_toa()};
+    };
+    void pack(uint8_t type, uint64_t toa) { packed = (toa << 8) + type; };
 };
 
 struct Header {
@@ -61,108 +69,6 @@ struct Hit {
     [[nodiscard]] uint64_t get_delay() const { return delay; }
     void set_delay(uint64_t t_delay) { delay = t_delay; }
     void set_toa(uint64_t t_toa) { toa = t_toa; }
-};
-struct TriggerEval {
-    std::vector<uint64_t> toas;
-    void merge(const TriggerEval &t_other);
-    void clear();
-};
-struct TriggerSoA {
-    std::vector<uint64_t> toas;
-    std::vector<uint16_t> types;
-    void push_back(const Trigger &t_trigger) {
-        toas.push_back(t_trigger.toa);
-        types.push_back(t_trigger.type);
-    }
-    void push_back(std::uint64_t t_toa, std::uint8_t t_type) {
-        toas.push_back(t_toa);
-        types.push_back(t_type);
-    }
-    [[nodiscard]] std::size_t num_triggers() const { return toas.size(); }
-    [[nodiscard]] bool empty() const { return toas.empty(); }
-    [[nodiscard]] Trigger at(std::size_t t_idx) const {
-        Trigger trigger;
-        trigger.toa = toas[t_idx];
-        trigger.type = types[t_idx];
-        return trigger;
-    }
-    void reserve(std::size_t t_size) {
-        toas.reserve(t_size);
-        types.reserve(t_size);
-    }
-    void clear() {
-        toas.clear();
-        types.clear();
-    }
-    void append(const TriggerSoA &t_triggers) {
-        toas.insert(toas.end(), t_triggers.toas.begin(), t_triggers.toas.end());
-        types.insert(types.end(), t_triggers.types.begin(),
-                     t_triggers.types.end());
-    }
-    size_t size() const { return toas.size(); };
-    using iter_toas_t = std::vector<uint64_t>::iterator;
-    using iter_types_t = std::vector<uint16_t>::iterator;
-    TriggerSoA() = default;
-    TriggerSoA(iter_toas_t t_toas_it_begin, iter_toas_t t_toas_it_end,
-               iter_types_t t_types_it_begin, iter_types_t t_types_it_end)
-        : toas(t_toas_it_begin, t_toas_it_end),
-          types(t_types_it_begin, t_types_it_end) {}
-};
-
-// Struct of Arrays layout for a batch of hits.
-struct HitSoA {
-    std::vector<uint64_t> toa;
-    std::vector<uint64_t> delay;
-    std::vector<uint32_t> tot;
-    std::vector<uint32_t> tot_cluster;
-    std::vector<uint16_t> x;
-    std::vector<uint16_t> y;
-    std::vector<uint8_t> size;
-
-    [[nodiscard]] std::size_t num_hits() const { return toa.size(); }
-    [[nodiscard]] bool empty() const { return toa.empty(); }
-
-    void push_back(const Hit &t_hit) {
-        toa.push_back(t_hit.toa);
-        delay.push_back(t_hit.delay);
-        tot.push_back(t_hit.tot);
-        tot_cluster.push_back(t_hit.tot_cluster);
-        x.push_back(t_hit.x);
-        y.push_back(t_hit.y);
-        size.push_back(t_hit.size);
-    }
-
-    [[nodiscard]] Hit at(std::size_t t_idx) const {
-        Hit hit;
-        hit.toa = toa[t_idx];
-        hit.delay = delay[t_idx];
-        hit.tot = tot[t_idx];
-        hit.tot_cluster = tot_cluster[t_idx];
-        hit.x = x[t_idx];
-        hit.y = y[t_idx];
-        hit.size = size[t_idx];
-        return hit;
-    }
-
-    void reserve(std::size_t t_size) {
-        toa.reserve(t_size);
-        delay.reserve(t_size);
-        tot.reserve(t_size);
-        tot_cluster.reserve(t_size);
-        x.reserve(t_size);
-        y.reserve(t_size);
-        size.reserve(t_size);
-    }
-
-    void clear() {
-        toa.clear();
-        delay.clear();
-        tot.clear();
-        tot_cluster.clear();
-        x.clear();
-        y.clear();
-        size.clear();
-    }
 };
 
 uint8_t get_byte(byte_t t_data, int t_byte);

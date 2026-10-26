@@ -5,6 +5,7 @@
 #include <map>
 #include <queue>
 #include "Memory_Map.hpp"
+#include "Parser.hpp"
 #include "clock_correction.hpp"
 #include "tpx3_helper.hpp"
 
@@ -94,8 +95,8 @@ void parse_header(tpx3_helper::Header t_header) {
             }
             case TRIGGER_NIBBLE: {
                 auto trigger = tpx3_helper::Trigger(data_entry);
-                triggers[t_header.chip_nr][trigger.type]++;
-                const auto time = trigger_correction.clock(trigger.toa);
+                triggers[t_header.chip_nr][trigger.get_type()]++;
+                const auto time = trigger_correction.clock(trigger.get_toa());
                 if (trigger_before > time) {
                     std::cout << "Found disorder: " << trigger_before << " > "
                               << time << std::endl;
@@ -155,6 +156,9 @@ int main(int argc, char *argv[]) {
     std::string filename = "tpx3.tpx3";
     if (argc == 2) filename = argv[1];
     MemoryMap mmap(filename);
-    parse(mmap);
+    // parse(mmap);
+    Parser<2> parser(std::move(mmap));
+    std::cout << "Starting parsing" << std::endl;
+    parser.parse();
     return 0;
 }

@@ -121,6 +121,25 @@ static void BM_Parser_S_Merger(benchmark::State &state) {
                             (map.end() - map.begin()) * 8);
 }
 
+static void BM_All() {
+    Parser parser;
+    ASSERT(std::filesystem::exists(TESTPATH), TESTPATH);
+    MemoryMap map(TESTPATH);
+
+    // TODO hit path
+    std::array<Sink<MPMC>, 4> hit_consumers;
+    for (size_t i = 0; i < hit_consumers.size(); ++i) {
+        hit_consumers[i].start(parser.get_batch_handle().m_hit_queue[i]);
+    }
+
+    for (auto _ : state) {
+        parser.parse(map);
+    }
+
+    state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
+                            (map.end() - map.begin()) * 8);
+}
+
 constexpr double MinTime = 1;
 
 BENCHMARK(BM_Parser)->Unit(benchmark::kSecond)->MinTime(MinTime);

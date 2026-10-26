@@ -28,19 +28,19 @@ class BatchQueue {
         if (not m_current_batch) {
             return nullptr;
         }
-        if (m_current_batch->insert_idx >= BATCH_SIZE) {
+        if (m_current_batch->size >= BATCH_SIZE) {
             m_current_batch = get_batch();
             if (not m_current_batch) {
                 return nullptr;
             }
-            m_current_batch->insert_idx = 0;
+            m_current_batch->size = 0;
         }
 
-        return &m_current_batch->data[m_current_batch->insert_idx];
+        return &m_current_batch->data[m_current_batch->size];
     };
     void pop() {
         DEBUG_ASSERT(m_current_batch);
-        DEBUG_ASSERT(m_current_batch->insert_idx < BATCH_SIZE);
-        m_current_batch->insert_idx++;
+        DEBUG_ASSERT(m_current_batch->size < BATCH_SIZE);
+        m_current_batch->size++;
     };
 };
