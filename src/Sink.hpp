@@ -12,6 +12,13 @@ class Sink {
 
     void operator()(Queue &queue)
         requires MCQueueable<Queue, U64BatchPtr>;
+
+    void operator()(Queue &queue)
+        requires SCQueueable<Queue, TriggerBatchPtr>;
+
+    void operator()(Queue &queue)
+        requires MCQueueable<Queue, TriggerBatchPtr>;
+
     void start(Queue &queue) {
         m_thread = std::jthread([this, &queue](std::stop_token stop) {
             pthread_setname_np(pthread_self(), "Sink");
@@ -33,6 +40,20 @@ void Sink<Queue>::operator()(Queue &queue)
 template <typename Queue>
 void Sink<Queue>::operator()(Queue &queue)
     requires SCQueueable<Queue, U64BatchPtr>
+{
+    if (queue.front()) queue.pop();
+}
+template <typename Queue>
+void Sink<Queue>::operator()(Queue &queue)
+    requires MCQueueable<Queue, TriggerBatchPtr>
+{
+    U64BatchPtr ba;
+    queue.try_pop(ba);
+}
+
+template <typename Queue>
+void Sink<Queue>::operator()(Queue &queue)
+    requires SCQueueable<Queue, TriggerBatchPtr>
 {
     if (queue.front()) queue.pop();
 }

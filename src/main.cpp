@@ -157,7 +157,7 @@ int main(int argc, char *argv[]) {
     if (argc == 2) filename = argv[1];
     MemoryMap mmap(filename);
     // parse(mmap);
-    Parser<2> parser(std::move(mmap));
+    Parser<4> parser(std::move(mmap));
     std::cout << "Starting parsing" << std::endl;
     parser.parse();
     return 0;

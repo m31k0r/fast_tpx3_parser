@@ -1,5 +1,7 @@
 #pragma once
+#include <sys/types.h>
 #include <cassert>
+#include <cstdint>
 #include <iostream>
 #include <libassert/assert.hpp>
 #include <memory>
@@ -22,8 +24,10 @@ class Batch_Pool {
 
    public:
     using BatchPtr = std::unique_ptr<Batch, Deleter>;
+
     std::vector<std::unique_ptr<Batch>> m_batches;
     rigtorp::MPMCQueue<Batch *> m_free_batches;
+    uint64_t sequence_number{0};
 
     explicit Batch_Pool(size_t capacity);
     ~Batch_Pool();
@@ -64,6 +68,7 @@ Batch_Pool<Batch>::acquire_batch_blocking() {
     }
     DEBUG_ASSERT(batch, "should not pop a null batch");
     batch->size = 0;
+    batch->sequence_number = sequence_number++;
     return BatchPtr(batch, Deleter{this});
 }
 template <typename Batch>
