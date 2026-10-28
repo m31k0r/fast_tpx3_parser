@@ -15,6 +15,7 @@
 #include "Extract_Queue.hpp"
 #include "MPMCQueue.h"
 #include "Memory_Map.hpp"
+#include "Merging_Buffer.hpp"
 #include "SPSCQueue.h"
 #include "Sink.hpp"
 #include "Sorter.hpp"
@@ -26,8 +27,13 @@ using U64SPSC = rigtorp::SPSCQueue<U64BatchPtr>;
 using TriggerMPMC = rigtorp::MPMCQueue<TriggerBatchPtr>;
 using TriggerSPSC = rigtorp::SPSCQueue<TriggerBatchPtr>;
 
+using HitMPMC = rigtorp::MPMCQueue<HitBatchPtr>;
+using HitSPSC = rigtorp::SPSCQueue<HitBatchPtr>;
+
 using U64InjSP = Injector<U64SPSC, U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>;
-using U64InjMP = Injector<U64MPMC, U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>;
+template <size_t N>
+using U64InjSPA = Injector<std::array<U64SPSC, N>, U64BatchPtr,
+                           Batch_Pool<U64Batch>, uint64_t>;
 
 template <typename Element_t, typename... Args, std::size_t... I>
 auto make_array(std::index_sequence<I...>, Args&&... args) {
@@ -39,21 +45,27 @@ auto make_array_l(std::index_sequence<I...>, F&& f) {
     return std::array<Element_t, sizeof...(I)>{
         f(std::integral_constant<std::size_t, I>{})...};
 }
+template <std::size_t N>
 struct Pusher {
     std::array<U64InjSP, 4> hit_inj;
-    U64InjMP trigger_inj;
+    U64InjSPA<N> trigger_inj;
 
     void insert_hit(uint64_t data, uint8_t t_chip_nr) {
         DEBUG_ASSERT(t_chip_nr < 4);
+        adaptive_backoff backoff;
         while (not hit_inj[t_chip_nr].try_push(data)) {
+            backoff.pause();
         }
     }
     void insert_trigger(uint64_t data) {
+        adaptive_backoff backoff;
         while (not trigger_inj.try_push(data)) {
+            backoff.pause();
         }
     };
 
-    Pusher(std::array<U64SPSC, 4>& hit_queue, U64MPMC& trigger_queue,
+    Pusher(std::array<U64SPSC, 4>& hit_queue,
+           std::array<U64SPSC, N>& trigger_queue,
            Batch_Pool<U64Batch>& batch_pool)
         : hit_inj(make_array_l<U64InjSP>(std::make_index_sequence<4>{},
                                          [&batch_pool, &hit_queue](int i) {
@@ -68,20 +80,23 @@ struct BatchHandle {
    public:
     Batch_Pool<U64Batch> U64batch_pool{BATCH_POOL_SIZE};
     Batch_Pool<TriggerBatch> Triggerbatch_pool{BATCH_POOL_SIZE};
+    Batch_Pool<HitBatch> Hitbatch_pool{BATCH_POOL_SIZE};
 
     // Hits
     std::array<U64SPSC, 4> hit_queue =
         make_array<U64SPSC>(std::make_index_sequence<4>{}, QUEUE_SIZE);
-    std::array<U64SPSC, 4> sorted_hit_queue =
-        make_array<U64SPSC>(std::make_index_sequence<4>{}, QUEUE_SIZE);
+    std::array<HitSPSC, 4> sorted_hit_queue =
+        make_array<HitSPSC>(std::make_index_sequence<4>{}, QUEUE_SIZE);
 
     // Triggers
-    U64MPMC trigger_queue{QUEUE_SIZE};
+    std::array<U64SPSC, Trigger_Parse_Threads> trigger_queue =
+        make_array<U64SPSC>(std::make_index_sequence<Trigger_Parse_Threads>{},
+                            QUEUE_SIZE);
     std::array<TriggerSPSC, Trigger_Parse_Threads> parsed_triggers =
         make_array<TriggerSPSC>(
             std::make_index_sequence<Trigger_Parse_Threads>{}, QUEUE_SIZE);
 
-    Pusher pusher;
+    Pusher<Trigger_Parse_Threads> pusher;
 
    public:
     BatchHandle() : pusher(hit_queue, trigger_queue, U64batch_pool) {}
@@ -104,17 +119,24 @@ class Worker {
         : in(t_in), out(t_out), work(std::move(t_work)) {
         worker = std::jthread([this](std::stop_token stop_token) {
             pthread_setname_np(pthread_self(), "Worker");
-            uint64_t seq_before [[maybe_unused]] = 0;
             while (not stop_token.stop_requested()) {
                 U64BatchPtr ba;
-                if (in.try_pop(ba)) {
+                if constexpr (MCQueueable<InQueue, U64BatchPtr>) {
+                    in.try_pop(ba);
+                } else {
+                    if (in.front()) {
+                        ba = std::move(*in.front());
+                        in.pop();
+                    }
+                }
+                if (ba) {
                     const auto old_seq [[maybe_unused]] = ba->sequence_number;
                     auto res = work.parse(std::move(ba));
                     DEBUG_ASSERT(res);
                     DEBUG_ASSERT(res->sequence_number == old_seq);
-                    DEBUG_ASSERT(old_seq == 0 || seq_before + 1 == old_seq);
-                    seq_before = old_seq;
+                    adaptive_backoff backoff;
                     while (not out.try_push(std::move(res))) {
+                        backoff.pause();
                     }
                 }
             }
@@ -128,29 +150,20 @@ class SPSCs2SPSC {
     size_t sequence_number = 0;
 
     TriggerBatchPtr next_batch() {
-        bool all_non_empty = true;
-        for (auto& queue : in) {
-            auto front = queue.front();
-            if (not front) {
-                all_non_empty = false;
-                continue;
-            }
+        auto front = in[sequence_number % N].front();
+        if (not front) {
+            return nullptr;
+        }
 
-            const auto front_seq_nr = front->get()->sequence_number;
-            if (front_seq_nr < sequence_number) {
-                PANIC("There should not be smaller seq number");
-            };
-            if (front_seq_nr == sequence_number) {
-                TriggerBatchPtr batch = std::move(*front);
-                queue.pop();
-                sequence_number++;
-                return batch;
-            }
+        const auto front_seq_nr = front->get()->sequence_number;
+        if (front_seq_nr == sequence_number) {
+            TriggerBatchPtr batch = std::move(*front);
+            in[sequence_number % N].pop();
+            sequence_number++;
+            return batch;
         }
-        if (all_non_empty) {
-            print_state();
-            PANIC("All queues are full but no match");
-        }
+        PANIC(std::format("No match found but queue is not empty {}!={}",
+                          front_seq_nr, sequence_number));
         return nullptr;
     }
 
@@ -195,42 +208,45 @@ class Parser {
             m_batch_handle.Triggerbatch_pool);
 
     // Main Parser
-    ParseHeader header;
+    ParseHeader<Pusher<Trigger_Parse_Threads>> header;
     MemoryMap map;
 
     // Trigger
-    using Worker_t = Worker<ParseTrigger, U64MPMC, TriggerSPSC>;
+    using Worker_t = Worker<ParseTrigger, U64SPSC, TriggerSPSC>;
     std::array<Worker_t, Trigger_Parse_Threads> m_parse_trigger =
         make_array_l<Worker_t>(
             std::make_index_sequence<Trigger_Parse_Threads>{}, [this](int i) {
                 return Worker_t{m_batch_handle.Triggerbatch_pool,
-                                m_batch_handle.trigger_queue,
+                                m_batch_handle.trigger_queue[i],
                                 m_batch_handle.parsed_triggers[i]};
             });
 
-    using Merger =
+    using TriggerMerger =
         SPSCs2SPSC<TriggerSPSC, Trigger_Parse_Threads, TriggerBatchPtr>;
-    Merger trigger_out_queue{m_batch_handle.parsed_triggers};
+    TriggerMerger trigger_out_queue{m_batch_handle.parsed_triggers};
 
     // Hits
-    using Sort_t = Sort<U64SPSC, U64SPSC, Compare_Hits>;
+    using Sort_t = Sort<U64SPSC, HitSPSC, Compare_Hits>;
     std::array<Sort_t, 4> sort_hits =
         make_array_l<Sort_t>(std::make_index_sequence<4>{}, [this](int i) {
             return Sort_t(m_batch_handle.hit_queue[i],
-                          m_batch_handle.sorted_hit_queue[i]);
+                          m_batch_handle.sorted_hit_queue[i],
+                          m_batch_handle.Hitbatch_pool);
         });
+    Merger merger{m_batch_handle.sorted_hit_queue,
+                  m_batch_handle.Hitbatch_pool};
 
     // Temporary Sinks;
-    std::array<Sink<U64SPSC>, 4> hit_sinks;
-    Sink<Merger> trigger_sink;
+    Sink<Merger> hit_sink;
+    Sink<TriggerMerger> trigger_sink;
 
    public:
     Parser(MemoryMap t_map)
         : header(m_batch_handle.pusher), map(std::move(t_map)) {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
-            hit_sinks[i].start(m_batch_handle.sorted_hit_queue[i]);
         }
+        hit_sink.start(merger);
         trigger_sink.start(trigger_out_queue);
     };
     void parse() {

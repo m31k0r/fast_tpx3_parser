@@ -5,15 +5,17 @@
 
 #include "Batch.hpp"
 #include "Constants.hpp"
+#include "Parse.hpp"
 #include "QueueConcepts.hpp"
 #include "Sorting_Buffer.hpp"
 
 template <typename InQueue, typename OutQueue, class Compare>
     requires SCQueueable<InQueue, U64BatchPtr> &&
-             SCQueueable<OutQueue, U64BatchPtr>
+             SCQueueable<OutQueue, HitBatchPtr>
 class Sort {
     InQueue &m_hit_queue;
     OutQueue &m_sorted_hit_queue;
+    ParseHit parsehit;
 
     std::jthread m_thread;
 
@@ -21,8 +23,11 @@ class Sort {
     bool buffer_filled = false;
 
    public:
-    Sort(InQueue &input_queue, OutQueue &output_queue)
-        : m_hit_queue(input_queue), m_sorted_hit_queue(output_queue) {}
+    Sort(InQueue &input_queue, OutQueue &output_queue,
+         Batch_Pool<HitBatch> &pool)
+        : m_hit_queue(input_queue),
+          m_sorted_hit_queue(output_queue),
+          parsehit(pool) {}
 
     void start_worker() {
         m_thread = std::jthread([this](std::stop_token stop) {
@@ -49,8 +54,10 @@ class Sort {
                               batch->begin());
 
                     // std::for_each(batch->begin(), batch->end(), Parse());
+                    HitBatchPtr hit_batch = parsehit.parse(std::move(batch));
 
-                    while (not m_sorted_hit_queue.try_push(std::move(batch))) {
+                    while (
+                        not m_sorted_hit_queue.try_push(std::move(hit_batch))) {
                         if (stop.stop_requested()) {
                             return;
                         }

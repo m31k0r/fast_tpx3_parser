@@ -18,6 +18,11 @@ class Sink {
 
     void operator()(Queue &queue)
         requires MCQueueable<Queue, TriggerBatchPtr>;
+    void operator()(Queue &queue)
+        requires SCQueueable<Queue, HitBatchPtr>;
+
+    void operator()(Queue &queue)
+        requires MCQueueable<Queue, HitBatchPtr>;
 
     void start(Queue &queue) {
         m_thread = std::jthread([this, &queue](std::stop_token stop) {
@@ -26,7 +31,6 @@ class Sink {
                 (*this)(queue);
             }
         });
-        std::cout << "Sink is running on queue: " << &queue << std::endl;
     }
 };
 template <typename Queue>
@@ -54,6 +58,20 @@ void Sink<Queue>::operator()(Queue &queue)
 template <typename Queue>
 void Sink<Queue>::operator()(Queue &queue)
     requires SCQueueable<Queue, TriggerBatchPtr>
+{
+    if (queue.front()) queue.pop();
+}
+template <typename Queue>
+void Sink<Queue>::operator()(Queue &queue)
+    requires MCQueueable<Queue, HitBatchPtr>
+{
+    U64BatchPtr ba;
+    queue.try_pop(ba);
+}
+
+template <typename Queue>
+void Sink<Queue>::operator()(Queue &queue)
+    requires SCQueueable<Queue, HitBatchPtr>
 {
     if (queue.front()) queue.pop();
 }
