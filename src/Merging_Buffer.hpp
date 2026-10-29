@@ -5,8 +5,8 @@
 #include <stop_token>
 #include "Batch.hpp"
 #include "Constants.hpp"
-#include "Extract_Queue.hpp"
-#include "SPSCQueue.h"
+#include "QueueUtility/Extractor.hpp"
+#include "Utility/SPSCQueue.h"
 
 class Merger {
     std::array<Extractor<rigtorp::SPSCQueue<HitBatchPtr>, HitBatchPtr>, 4>

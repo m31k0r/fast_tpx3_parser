@@ -1,4 +1,4 @@
-#include "Extract_Queue.hpp"
+#include "QueueUtility/Extractor.hpp"
 #include "Batch.hpp"
 #include "Batch_Pool.hpp"
 #include "Delay_Calc.hpp"
@@ -7,7 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
-#include "SPSCQueue.h"
+#include "Utility/SPSCQueue.h"
 
 using Queue = rigtorp::SPSCQueue<U64BatchPtr>;
 

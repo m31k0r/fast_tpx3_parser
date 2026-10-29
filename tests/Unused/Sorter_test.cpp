@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include "Compare.hpp"
-#include "SPSCQueue.h"
+#include "Utility/SPSCQueue.h"
 
 TEST_CASE("Construction of Sorter") {
     rigtorp::MPMCQueue<U64BatchPtr> inqueue(10);

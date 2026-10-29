@@ -1,5 +1,4 @@
 #pragma once
-#include <sys/types.h>
 #include <assert.hpp>
 #include <chrono>
 #include <cstdint>
@@ -12,14 +11,15 @@
 #include "Batch_Pool.hpp"
 #include "Compare.hpp"
 #include "Constants.hpp"
-#include "Extract_Queue.hpp"
-#include "MPMCQueue.h"
-#include "Memory_Map.hpp"
+#include "QueueUtility/Extractor.hpp"
+#include "Utility/MPMCQueue.h"
+#include "Utility/Memory_Map.hpp"
 #include "Merging_Buffer.hpp"
-#include "SPSCQueue.h"
+#include "Utility/SPSCQueue.h"
 #include "Sink.hpp"
 #include "Sorter.hpp"
-#include "tpx3_helper.hpp"
+#include "Utility/helper.hpp"
+#include "QueueUtility/Injector.hpp"
 
 using U64MPMC = rigtorp::MPMCQueue<U64BatchPtr>;
 using U64SPSC = rigtorp::SPSCQueue<U64BatchPtr>;
@@ -35,16 +35,7 @@ template <size_t N>
 using U64InjSPA = Injector<std::array<U64SPSC, N>, U64BatchPtr,
                            Batch_Pool<U64Batch>, uint64_t>;
 
-template <typename Element_t, typename... Args, std::size_t... I>
-auto make_array(std::index_sequence<I...>, Args&&... args) {
-    return std::array<Element_t, sizeof...(I)>{
-        (static_cast<void>(I), Element_t{std::forward<Args>(args)...})...};
-}
-template <typename Element_t, typename F, std::size_t... I>
-auto make_array_l(std::index_sequence<I...>, F&& f) {
-    return std::array<Element_t, sizeof...(I)>{
-        f(std::integral_constant<std::size_t, I>{})...};
-}
+
 template <std::size_t N>
 struct Pusher {
     std::array<U64InjSP, 4> hit_inj;
@@ -120,8 +111,8 @@ class Worker {
         : in(t_in), out(t_out), work(std::move(t_work)) {
         worker = std::jthread([this](std::stop_token stop_token) {
             pthread_setname_np(pthread_self(), "Worker");
-            uint64_t previous_seq_nr [[maybe_unused]] = 0;
             while (not stop_token.stop_requested()) {
+                uint64_t previous_seq_nr [[maybe_unused]] = 0;
                 U64BatchPtr ba;
                 if constexpr (MCQueueable<InQueue, U64BatchPtr>) {
                     in.try_pop(ba);
@@ -252,8 +243,8 @@ class Parser {
                       })};
 
     // Temporary Sinks;
-    Sink<Merger> hit_sink;
-    Sink<TriggerMerger> trigger_sink;
+    Sink<Merger, HitBatchPtr> hit_sink;
+    Sink<TriggerMerger, TriggerBatchPtr> trigger_sink;
 
    public:
     Parser(MemoryMap t_map)

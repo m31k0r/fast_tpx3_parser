@@ -6,7 +6,7 @@
 #include <libassert/assert.hpp>
 #include <memory>
 #include <vector>
-#include "MPMCQueue.h"
+#include "Utility/MPMCQueue.h"
 
 template <typename Batch>
 class Batch_Pool {

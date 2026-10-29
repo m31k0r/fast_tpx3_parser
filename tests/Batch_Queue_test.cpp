@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <print>
 #include "Batch_Queue.hpp"
-#include "SPSCQueue.h"
+#include "Utility/SPSCQueue.h"
 
 using Queue = rigtorp::SPSCQueue<U64BatchPtr>;
 

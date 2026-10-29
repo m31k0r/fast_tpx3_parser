@@ -8,8 +8,8 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
 #include "Batch_Pool.hpp"
-#include "Extract_Queue.hpp"
-#include "SPSCQueue.h"
+#include "QueueUtility/Extractor.hpp"
+#include "Utility/SPSCQueue.h"
 
 using Queue = rigtorp::SPSCQueue<U64BatchPtr>;
 

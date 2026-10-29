@@ -19,6 +19,11 @@ struct alignas(std::hardware_destructive_interference_size) U64Batch {
     auto end() const { return data.begin() + size; }
     auto begin() { return data.begin(); }
     auto end() { return data.begin() + size; }
+    void push_back(uint64_t t_data) {
+        DEBUG_ASSERT(size <= BATCH_SIZE);
+        data[size] = t_data;
+        size++;
+    }
 };
 struct alignas(std::hardware_destructive_interference_size) TriggerBatch {
     std::array<uint64_t, BATCH_SIZE> toa{};
@@ -55,15 +60,4 @@ using U64BatchPtr = typename Batch_Pool<U64Batch>::BatchPtr;
 using TriggerBatchPtr = typename Batch_Pool<TriggerBatch>::BatchPtr;
 using HitBatchPtr = typename Batch_Pool<HitBatch>::BatchPtr;
 
-template <typename BatchPtr, typename BatchPool, typename Queue>
-void exchange_batch_on_full(BatchPtr &batch, BatchPool &batch_pool,
-                            Queue &queue) {
-    DEBUG_ASSERT(batch, "Null batch in exchange_batch_on_full");
-    if (batch->size >= BATCH_SIZE) {
-        const auto new_seq_nr = batch->sequence_number + 1;
-        while (not queue.try_push(std::move(batch))) {
-        }
-        batch = batch_pool.acquire_batch_blocking();
-        batch->sequence_number = new_seq_nr;
-    }
-}
+

@@ -2,9 +2,8 @@
 #include <system_error>
 #include "Batch.hpp"
 #include "Batch_Pool.hpp"
-#include "MPMCQueue.h"
-#include "Memory_Map.hpp"
-#include "Parser.hpp"
+#include "Utility/MPMCQueue.h"
+#include "Utility/Memory_Map.hpp"
 #include "tpx3_helper.hpp"
 
 class ParseTrigger {

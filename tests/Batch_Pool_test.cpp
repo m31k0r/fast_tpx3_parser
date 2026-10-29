@@ -1,7 +1,7 @@
 #include "Batch_Pool.hpp"
 #include <cstdint>
 #include "Batch.hpp"
-#include "SPSCQueue.h"
+#include "Utility/SPSCQueue.h"
 #include "catch2/catch_all.hpp"
 
 TEST_CASE("Pop and release with a batch pool") {
@@ -27,18 +27,3 @@ TEST_CASE("Deletion order") {
     REQUIRE(batch_pool.available_batches() == 31);
 }
 
-TEST_CASE("Exchange batch on full seq. nr.") {
-    constexpr auto bp_size = 64;
-    rigtorp::SPSCQueue<U64BatchPtr> queue(64);
-    Batch_Pool<U64Batch> batch_pool(bp_size);
-    auto batch = batch_pool.acquire_batch_blocking();
-    uint64_t seq_nr = 0;
-    REQUIRE(batch->sequence_number == seq_nr++);
-    for (int i = 0; i < 100; ++i) {
-        exchange_batch_on_full(batch, batch_pool, queue);
-        REQUIRE(batch->sequence_number == seq_nr++);
-        if (queue.front()) {
-            queue.pop();
-        }
-    }
-}
