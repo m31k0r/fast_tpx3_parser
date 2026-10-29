@@ -41,6 +41,14 @@ struct alignas(std::hardware_destructive_interference_size) HitBatch {
     std::array<uint16_t, BATCH_SIZE> y{};
     size_t size{0};
     size_t sequence_number{0};
+    void push_back(uint64_t t_toa, uint64_t t_tot, uint16_t t_x, uint16_t t_y) {
+        DEBUG_ASSERT(size <= BATCH_SIZE);
+        toa[size] = t_toa;
+        tot[size] = t_tot;
+        x[size] = t_x;
+        y[size] = t_y;
+        size++;
+    }
 };
 
 using U64BatchPtr = typename Batch_Pool<U64Batch>::BatchPtr;

@@ -12,7 +12,7 @@
 #include <immintrin.h>
 #endif
 
-constexpr auto num_runs = 30;
+constexpr auto num_runs = 3;
 constexpr size_t BATCH_SIZE = std::hardware_constructive_interference_size * 16;
 constexpr size_t BATCH_POOL_SIZE = 32 * 32;
 constexpr size_t QUEUE_SIZE = 16;
@@ -46,7 +46,7 @@ class adaptive_backoff {
         } else if (failures_ < yield_limit) {
             std::this_thread::yield();
         } else {
-            const auto exponent = std::min((failures_ - yield_limit) / 32, 4u);
+            const auto exponent = std::min((failures_ - yield_limit) / 32, 8u);
 
             const auto delay = initial_sleep * (1u << exponent);
             std::this_thread::sleep_for(delay);
@@ -54,11 +54,11 @@ class adaptive_backoff {
 
         if (failures_ < yield_limit + 160) ++failures_;
 
-        if (failures_ == yield_limit + 160) {
-            std::cerr << "Queue stuck:\n"
-                      << libassert::stacktrace() << "\n\n"
-                      << std::endl;
-        }
+        // if (failures_ == yield_limit + 160) {
+        //     std::cerr << "Queue stuck:\n"
+        //               << libassert::stacktrace() << "\n\n"
+        //               << std::endl;
+        // }
     }
 
     void reset() noexcept { failures_ = 0; }

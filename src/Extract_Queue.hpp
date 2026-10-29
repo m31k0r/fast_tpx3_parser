@@ -124,12 +124,12 @@ class Injector {
 
         if (current_batch->size >= BATCH_SIZE) {
             auto old_seq [[maybe_unused]] = current_batch->sequence_number;
-            inject();
+            if (not inject()) return false;
             current_batch = next_batch();
             DEBUG_ASSERT(current_batch->size == 0,
                          "New Batch should have zero size");
             DEBUG_ASSERT(old_seq + 1 == current_batch->sequence_number,
-                         "Seuqence should be kept");
+                         "Sequence should be kept");
         }
 
         current_batch->data[current_batch->size] = std::forward<T>(val);

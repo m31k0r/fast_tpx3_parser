@@ -110,6 +110,7 @@ struct BatchHandle {
 template <class Work, class InQueue, class OutQueue>
 class Worker {
     std::jthread worker;
+
     InQueue& in;
     OutQueue& out;
     Work work;
@@ -119,6 +120,7 @@ class Worker {
         : in(t_in), out(t_out), work(std::move(t_work)) {
         worker = std::jthread([this](std::stop_token stop_token) {
             pthread_setname_np(pthread_self(), "Worker");
+            uint64_t previous_seq_nr [[maybe_unused]] = 0;
             while (not stop_token.stop_requested()) {
                 U64BatchPtr ba;
                 if constexpr (MCQueueable<InQueue, U64BatchPtr>) {
@@ -134,6 +136,9 @@ class Worker {
                     auto res = work.parse(std::move(ba));
                     DEBUG_ASSERT(res);
                     DEBUG_ASSERT(res->sequence_number == old_seq);
+                    DEBUG_ASSERT(previous_seq_nr == 0 ||
+                                 previous_seq_nr + 1 == res->sequence_number);
+                    previous_seq_nr = old_seq;
                     adaptive_backoff backoff;
                     while (not out.try_push(std::move(res))) {
                         backoff.pause();
@@ -161,6 +166,12 @@ class SPSCs2SPSC {
             in[sequence_number % N].pop();
             sequence_number++;
             return batch;
+        }
+
+        while (in[sequence_number % N].front()) {
+            auto val = std::move(*in[sequence_number % N].front());
+            std::cout << val->sequence_number << std::endl;
+            in[sequence_number % N].pop();
         }
         PANIC(std::format("No match found but queue is not empty {}!={}",
                           front_seq_nr, sequence_number));
@@ -233,8 +244,12 @@ class Parser {
                           m_batch_handle.sorted_hit_queue[i],
                           m_batch_handle.Hitbatch_pool);
         });
-    Merger merger{m_batch_handle.sorted_hit_queue,
-                  m_batch_handle.Hitbatch_pool};
+    Merger merger{m_batch_handle.Hitbatch_pool,
+                  make_array_l<Extractor<HitSPSC, HitBatchPtr>>(
+                      std::make_index_sequence<4>{}, [this](size_t i) {
+                          return Extractor<HitSPSC, HitBatchPtr>(
+                              m_batch_handle.sorted_hit_queue[i]);
+                      })};
 
     // Temporary Sinks;
     Sink<Merger> hit_sink;
@@ -247,6 +262,7 @@ class Parser {
             sort_hits[i].start_worker();
         }
         hit_sink.start(merger);
+        merger.set_stop_token(hit_sink.get_stop_token());
         trigger_sink.start(trigger_out_queue);
     };
     void parse() {

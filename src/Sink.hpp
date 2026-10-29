@@ -1,3 +1,4 @@
+#include <stop_token>
 #include <thread>
 #include "Batch.hpp"
 #include "QueueConcepts.hpp"
@@ -7,6 +8,7 @@ class Sink {
     std::jthread m_thread;
 
    public:
+    std::stop_token get_stop_token() { return m_thread.get_stop_token(); }
     void operator()(Queue &queue)
         requires SCQueueable<Queue, U64BatchPtr>;
 
