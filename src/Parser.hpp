@@ -102,6 +102,7 @@ struct BatchHandle {
 
 template <size_t Trigger_Parse_Threads>
 class Parser {
+    Camera camera_;
     BatchHandle<Trigger_Parse_Threads> m_batch_handle;
     std::array<ParseTrigger, Trigger_Parse_Threads> m_parser =
         make_array<ParseTrigger>(
@@ -132,7 +133,7 @@ class Parser {
         make_array_l<Sort_t>(std::make_index_sequence<4>{}, [this](int i) {
             return Sort_t(m_batch_handle.hit_queue[i],
                           m_batch_handle.sorted_hit_queue[i],
-                          m_batch_handle.Hitbatch_pool);
+                          m_batch_handle.Hitbatch_pool,camera_);
         });
     Merger merger{m_batch_handle.Hitbatch_pool,
                   make_array_l<Extractor<HitSPSC, HitBatchPtr>>(

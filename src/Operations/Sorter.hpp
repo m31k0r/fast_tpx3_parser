@@ -24,10 +24,10 @@ class Sort {
 
    public:
     Sort(InQueue &input_queue, OutQueue &output_queue,
-         Batch_Pool<HitBatch> &pool)
+         Batch_Pool<HitBatch> &pool, Camera &camera)
         : m_hit_queue(input_queue),
           m_sorted_hit_queue(output_queue),
-          parsehit(pool) {}
+          parsehit(pool,camera) {}
 
     void start_worker() {
         m_thread = std::jthread([this](std::stop_token stop) {
