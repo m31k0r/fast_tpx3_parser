@@ -3,10 +3,10 @@
 #include <libassert/assert.hpp>
 #include <thread>
 
-#include "Batch/Batch.hpp"
-#include "Constants.hpp"
-#include "QueueConcepts.hpp"
-#include "Parsing/ParseHits.hpp"
+#include "../Batch/Batch.hpp"
+#include "../Constants.hpp"
+#include "../QueueUtility/QueueConcepts.hpp"
+#include "../Parsing/ParseHits.hpp"
 
 
 template <typename InQueue, typename OutQueue, class Compare>

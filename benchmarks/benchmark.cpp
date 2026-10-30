@@ -5,11 +5,11 @@
 #include "Compare.hpp"
 #include "Constants.hpp"
 #include "Memory_Map.hpp"
-#include "Merging_Buffer.hpp"
+#include "../src/Operations/Merging_Buffer.hpp"
 #include "Parser.hpp"
 #include "Queue_Status.hpp"
 #include "../src/Operations/Sink.hpp"
-#include "Sorter.hpp"
+#include "../src/Operations/Sorter.hpp"
 
 using MPMC = rigtorp::MPMCQueue<U64BatchPtr>;
 using SPSC = rigtorp::SPSCQueue<U64BatchPtr>;

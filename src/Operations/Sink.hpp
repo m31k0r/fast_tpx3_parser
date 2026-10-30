@@ -1,7 +1,7 @@
 #include <stop_token>
 #include <thread>
 #include "../Batch/Batch.hpp"
-#include "../QueueConcepts.hpp"
+#include "../QueueUtility/QueueConcepts.hpp"
 
 template <typename Queue, typename BatchPtr>
 class Sink {

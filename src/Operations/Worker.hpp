@@ -1,4 +1,5 @@
 #pragma once
+#include "Utility/AdaptivBackoff.hpp"
 
 template <class Work, class InQueue, class OutQueue>
 class Worker {

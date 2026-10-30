@@ -35,6 +35,8 @@ add_library(mylib
         src/Parsing/ParseHits.hpp
         src/Parsing/ParseHeader.hpp
         src/Parsing/ParseTrigger.hpp
+        src/Utility/AdaptivBackoff.cpp
+        src/Utility/AdaptivBackoff.hpp
 )
 
 target_include_directories(mylib

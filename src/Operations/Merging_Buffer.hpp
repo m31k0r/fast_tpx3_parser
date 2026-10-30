@@ -3,10 +3,12 @@
 #include <assert.hpp>
 #include <cstdint>
 #include <stop_token>
-#include "Batch/Batch.hpp"
-#include "Constants.hpp"
-#include "QueueUtility/Extractor.hpp"
-#include "Utility/SPSCQueue.h"
+#include <utility>
+#include "../Batch/Batch.hpp"
+#include "../Constants.hpp"
+#include "../QueueUtility/Extractor.hpp"
+#include "../Utility/SPSCQueue.h"
+#include "Utility/AdaptivBackoff.hpp"
 
 class Merger {
     std::array<Extractor<rigtorp::SPSCQueue<HitBatchPtr>, HitBatchPtr>, 4>
@@ -21,18 +23,18 @@ class Merger {
         for (size_t i = 0; i < BATCH_SIZE; ++i) {
             uint64_t earliest_time = std::numeric_limits<uint64_t>::max();
             uint8_t earliest_chip = 0;
-            for (int i = 0; i < 4; ++i) {
+            for (int chip_nr = 0; chip_nr < 4; ++chip_nr) {
                 adaptive_backoff backoff;
-                while (not extractors[i].front()) {
+                while (not extractors[chip_nr].front()) {
                     backoff.pause();
                     if (stop.stop_requested()) {
                         return;
                     }
                 }
-                auto hit = extractors[i].front();
+                auto hit = extractors[chip_nr].front();
                 if (hit.toa() < earliest_time) {
                     earliest_time = hit.toa();
-                    earliest_chip = i;
+                    earliest_chip = chip_nr;
                 }
             }
             const auto hit = extractors[earliest_chip].front();
@@ -47,8 +49,8 @@ class Merger {
         std::array<Extractor<rigtorp::SPSCQueue<HitBatchPtr>, HitBatchPtr>, 4>;
     Merger(Batch_Pool<HitBatch>& t_batch_pool, Array arr,
            std::stop_token t_stop = {})
-        : extractors(std::move(arr)), batch_pool(t_batch_pool), stop(t_stop) {};
-    void set_stop_token(std::stop_token t_stop) { stop = t_stop; }
+        : extractors(std::move(arr)), batch_pool(t_batch_pool), stop(std::move(t_stop)) {};
+    void set_stop_token(const std::stop_token &t_stop) { stop = t_stop; }
     HitBatchPtr* front() {
         if (not current_batch) fill_batch();
         return &current_batch;

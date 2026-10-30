@@ -103,9 +103,9 @@ defined in `src/Constants.hpp`.
 | `src/Memory_Map.*` | Memory-mapped input |
 | `src/tpx3_helper.*` | TPX3 header, hit, trigger, and frame helpers |
 | `../src/Batch/Batch.hpp`, `../src/Batch/Batch_Pool.hpp` | Fixed-size batches and batch reuse |
-| `src/Sorter.hpp`, `src/Sorting_Buffer.hpp`, `src/Compare.hpp` | Bounded-window ordering |
-| `src/Merging_Buffer.hpp` | Sequence-based batch selection and boundary ordering |
-| `src/Sink.*`, `src/QueueConcepts.hpp` | Queue draining and queue interface concepts |
+| `../src/Operations/Sorter.hpp`, `src/Sorting_Buffer.hpp`, `src/Compare.hpp` | Bounded-window ordering |
+| `../src/Operations/Merging_Buffer.hpp` | Sequence-based batch selection and boundary ordering |
+| `src/Sink.*`, `../src/QueueUtility/QueueConcepts.hpp` | Queue draining and queue interface concepts |
 | `src/Rotation.*` | Coordinate orientation transforms |
 | `tests/` | Unit tests for batch-pool, sorting/merging, and rotation components |
 | `benchmarks/benchmark.cpp` | Parser and parser-plus-sorter benchmarks |
