@@ -5,7 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "Batch.hpp"
+#include "../Batch/Batch.hpp"
 #include "Utility/SPSCQueue.h"
 
 using SPSC = rigtorp::SPSCQueue<U64BatchPtr>;

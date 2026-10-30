@@ -3,7 +3,7 @@
 #include <libassert/assert.hpp>
 #include <thread>
 
-#include "Batch.hpp"
+#include "Batch/Batch.hpp"
 #include "Constants.hpp"
 #include "Parsing/Parse.hpp"
 #include "QueueConcepts.hpp"

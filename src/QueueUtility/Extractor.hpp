@@ -1,7 +1,7 @@
 #pragma once
 #include <assert.hpp>
 
-#include "Batch.hpp"
+#include "../Batch/Batch.hpp"
 #include "QueueConcepts.hpp"
 #include "Constants.hpp"
 

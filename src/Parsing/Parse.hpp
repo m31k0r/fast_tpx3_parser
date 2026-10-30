@@ -1,7 +1,7 @@
 #pragma once
 #include <system_error>
-#include "../Batch.hpp"
-#include "../Batch_Pool.hpp"
+#include "Batch/Batch.hpp"
+#include "Batch/Batch_Pool.hpp"
 #include "../Utility/MPMCQueue.h"
 #include "../Utility/Memory_Map.hpp"
 #include "tpx3_helper.hpp"

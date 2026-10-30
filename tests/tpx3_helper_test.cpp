@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <stdexcept>
 
-#include "tpx3_helper.hpp"
+#include "../src/Parsing/tpx3_helper.hpp"
 
 using namespace tpx3_helper;
 TEST_CASE("Trigger") {

@@ -7,8 +7,8 @@
 #include <stop_token>
 #include <thread>
 #include <utility>
-#include "Batch.hpp"
-#include "Batch_Pool.hpp"
+#include "Batch/Batch.hpp"
+#include "Batch/Batch_Pool.hpp"
 #include "Compare.hpp"
 #include "Constants.hpp"
 #include "QueueUtility/Extractor.hpp"

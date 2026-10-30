@@ -1,9 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "QueueUtility/Sequencer.hpp"
-#include "Batch.hpp"
-#include "../Batch.hpp"
-#include "../Batch_Pool.hpp"
+#include "Batch/Batch.hpp"
+#include "Batch/Batch_Pool.hpp"
 #include "Utility/SPSCQueue.h"
 
 struct U64Batch;

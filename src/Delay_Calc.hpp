@@ -1,6 +1,6 @@
 #pragma once
 #include <assert.hpp>
-#include "Batch.hpp"
+#include "Batch/Batch.hpp"
 #include "QueueConcepts.hpp"
 template <typename InQueue, typename OutQueue>
     requires SCQueueable<InQueue, uint64_t> && InQueueable<OutQueue, uint64_t>

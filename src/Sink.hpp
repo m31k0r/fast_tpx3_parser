@@ -1,6 +1,6 @@
 #include <stop_token>
 #include <thread>
-#include "Batch.hpp"
+#include "Batch/Batch.hpp"
 #include "QueueConcepts.hpp"
 
 template <typename Queue, typename BatchPtr>

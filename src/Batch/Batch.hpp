@@ -5,8 +5,8 @@
 #include <libassert/assert.hpp>
 #include <new>
 #include "Batch_Pool.hpp"
-#include "Constants.hpp"
-#include "Parsing/tpx3_helper.hpp"
+#include "../Constants.hpp"
+#include "../Parsing/tpx3_helper.hpp"
 
 struct alignas(std::hardware_destructive_interference_size) U64Batch {
     std::array<uint64_t, BATCH_SIZE> data{};

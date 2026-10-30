@@ -3,7 +3,7 @@
 #include <assert.hpp>
 #include <cstdint>
 #include <stop_token>
-#include "Batch.hpp"
+#include "Batch/Batch.hpp"
 #include "Constants.hpp"
 #include "QueueUtility/Extractor.hpp"
 #include "Utility/SPSCQueue.h"

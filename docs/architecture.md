@@ -102,7 +102,7 @@ defined in `src/Constants.hpp`.
 | `src/Parser.*` | File traversal and dispatch of encoded words |
 | `src/Memory_Map.*` | Memory-mapped input |
 | `src/tpx3_helper.*` | TPX3 header, hit, trigger, and frame helpers |
-| `src/Batch.hpp`, `src/Batch_Pool.hpp` | Fixed-size batches and batch reuse |
+| `../src/Batch/Batch.hpp`, `../src/Batch/Batch_Pool.hpp` | Fixed-size batches and batch reuse |
 | `src/Sorter.hpp`, `src/Sorting_Buffer.hpp`, `src/Compare.hpp` | Bounded-window ordering |
 | `src/Merging_Buffer.hpp` | Sequence-based batch selection and boundary ordering |
 | `src/Sink.*`, `src/QueueConcepts.hpp` | Queue draining and queue interface concepts |

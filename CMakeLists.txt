@@ -74,11 +74,7 @@ enable_testing()
 find_package(Catch2 3 REQUIRED)
 
 add_executable(unit_tests
-        tests/Batch_Pool_test.cpp
-        tests/Merging_Buffer_test.cpp
-        tests/Batch_Queue_test.cpp
-        tests/Delay_Calc_test.cpp
-        tests/Extract_Queue_test.cpp
+        src/Batch/Batch_Pool_test.cpp
         tests/tpx3_helper_test.cpp
         src/QueueUtility/Extractor_test.cpp
         src/QueueUtility/Injector_test.cpp
