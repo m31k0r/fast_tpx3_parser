@@ -96,7 +96,7 @@ struct BatchHandle {
     BatchHandle& operator=(const BatchHandle&) = delete;
 };
 
-#include "Parse.hpp"
+#include "Parsing/Parse.hpp"
 
 template <class Work, class InQueue, class OutQueue>
 class Worker {

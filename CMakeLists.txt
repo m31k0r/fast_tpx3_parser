@@ -26,11 +26,12 @@ find_package(libassert REQUIRED)
 add_library(mylib
         #src/Rotation.cpp
         src/Utility/Memory_Map.cpp
-        src/tpx3_helper.cpp
+        src/Parsing/tpx3_helper.cpp
         src/Parser.cpp
         src/Sink.cpp
         src/QueueUtility/Extractor.cpp
         src/QueueUtility/Injector.cpp
+        src/Utility/bits.hpp
 )
 
 target_include_directories(mylib

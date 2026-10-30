@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include "Utility/bits.hpp"
 
 constexpr uint64_t FRAME_NIBBLE = 0x7;
 constexpr uint64_t TRIGGER_NIBBLE = 0x6;
@@ -72,14 +73,6 @@ struct Hit {
 };
 
 uint8_t get_byte(byte_t t_data, int t_byte);
-
-constexpr auto get_bits(const byte_t t_data, const int t_start_bit,
-                        const int t_end_bit) -> uint64_t {
-    auto num = (t_end_bit - t_start_bit) + 1;
-    uint64_t const mask = (uint64_t(1) << num) - 1;
-    auto mask_shifted = mask << t_start_bit;
-    return (t_data & mask_shifted) >> t_start_bit;
-}
 bool check_health(const byte_t *t_data);
 std::optional<Header> parse_header(const byte_t *t_data_ptr);
 uint64_t parse_frame(byte_t t_frame);

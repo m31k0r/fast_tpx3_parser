@@ -7,7 +7,7 @@
 #include "Utility/Memory_Map.hpp"
 #include "Parser.hpp"
 #include "clock_correction.hpp"
-#include "tpx3_helper.hpp"
+#include "Parsing/tpx3_helper.hpp"
 
 class MaxDisplacement {
    public:
