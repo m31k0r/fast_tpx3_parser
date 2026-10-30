@@ -24,7 +24,7 @@ find_package(libassert REQUIRED)
 # ---------------------------------------------------------------------------
 
 add_library(mylib
-        #src/Rotation.cpp
+        src/Parsing/Rotation.cpp
         src/Utility/Memory_Map.cpp
         src/Parsing/tpx3_helper.cpp
         src/Parser.cpp
@@ -83,6 +83,7 @@ add_executable(unit_tests
         src/QueueUtility/Extractor_test.cpp
         src/QueueUtility/Injector_test.cpp
         src/QueueUtility/Sequencer_test.cpp
+        src/Parsing/Rotation_test.cpp
 )
 
 target_link_libraries(unit_tests

@@ -12,9 +12,9 @@ public:
     TriggerBatchPtr parse(const U64BatchPtr &batch) {
         TriggerBatchPtr out_batch = batch_pool.acquire_batch_blocking();
         out_batch->sequence_number = batch->sequence_number;
-        for (auto u64 : *batch) {
+        for (const auto u64 : *batch) {
             auto [type, toa] = tpx3_helper::parse_trigger(u64);
-            out_batch->push_back(toa, 0, type);
+            out_batch->push_back(toa, type);
         }
         for (auto & toa : out_batch->toa) {
             toa =clock_correction_.clock(toa);
