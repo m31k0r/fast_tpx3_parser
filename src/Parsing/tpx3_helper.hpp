@@ -29,26 +29,17 @@ enum class Status : std::uint8_t {
 };
 
 using byte_t = uint64_t;
-struct Trigger {
-    uint64_t packed{};
-    Trigger(uint64_t t_data);
-    Trigger() = default;
-
-    std::string to_string() const;
-    [[nodiscard]] uint64_t get_toa() const {
-        const auto toa = packed >> 8;
-        return toa;
-    };
-    [[nodiscard]] uint8_t get_type() const {
-        const uint8_t type = packed;
-        return type;
-    };
-    [[nodiscard]] std::pair<uint8_t, uint64_t> unpack() {
-        return {get_type(), get_toa()};
-    };
-    void pack(uint8_t type, uint64_t toa) { packed = (toa << 8) + type; };
+inline std::pair<uint8_t, uint64_t> parse_trigger(uint64_t t_data) {
+    auto timestep = get_bits(t_data, 9, 43);
+    // auto counter = get_bits(t_data, 44, 55);
+    auto stamp = get_bits(t_data, 5, 8);
+    // assert(stamp <= 12);
+    // assert(stamp >= 1);
+    auto count = ((timestep * 12) + stamp - 1);
+    const auto toa = (count * 260) + (count * 5 / 12);
+    const auto type = get_bits(t_data, 56, 59);
+    return {type, toa};
 };
-
 struct Header {
    public:
     const byte_t *start;
@@ -72,7 +63,6 @@ struct Hit {
     void set_toa(uint64_t t_toa) { toa = t_toa; }
 };
 
-uint8_t get_byte(byte_t t_data, int t_byte);
 bool check_health(const byte_t *t_data);
 std::optional<Header> parse_header(const byte_t *t_data_ptr);
 uint64_t parse_frame(byte_t t_frame);

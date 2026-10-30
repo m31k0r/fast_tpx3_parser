@@ -1,152 +1,82 @@
-#include <benchmark/benchmark.h>
-#include <filesystem>
-#include <memory>
-#include <thread>
-#include "Compare.hpp"
-#include "Constants.hpp"
-#include "Memory_Map.hpp"
-#include "../src/Operations/Merging_Buffer.hpp"
-#include "Parser.hpp"
-#include "Queue_Status.hpp"
-#include "../src/Operations/Sink.hpp"
-#include "../src/Operations/Sorter.hpp"
+#include <cstdint>
+#include <vector>
+#include "benchmark/benchmark.h"
 
-using MPMC = rigtorp::MPMCQueue<U64BatchPtr>;
-using SPSC = rigtorp::SPSCQueue<U64BatchPtr>;
+#include "clock_correction.hpp"
 
-const std::filesystem::path TESTPATH = std::filesystem::path("./tpx3.tpx3");
+constexpr uint64_t ROLL_OVER_TIME = 1000000;
 
-// Benchmark for std::sort
-static void BM_Parser(benchmark::State &state) {
-    Parser parser;
-    ASSERT(std::filesystem::exists(TESTPATH), TESTPATH);
-    MemoryMap map(TESTPATH);
+enum class Pattern {
+    Sequential,
+    Backwards,
+    Rollover
+};
 
-    std::array<Sink<MPMC>, 4> hit_consumers;
-    for (size_t i = 0; i < hit_consumers.size(); ++i) {
-        hit_consumers[i].start(parser.get_batch_handle().m_hit_queue[i]);
-    }
-    std::array<Sink<MPMC>, 1> trigger_consumers;
-    for (size_t i = 0; i < trigger_consumers.size(); ++i) {
-        trigger_consumers[i].start(parser.get_batch_handle().m_trigger_queue);
-    }
+std::vector<uint64_t> makeInput(size_t count, Pattern pattern) {
+    std::vector<uint64_t> result;
+    result.reserve(count);
 
-    for (auto _ : state) {
-        parser.parse(map);
-    }
-    state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
-                            (map.end() - map.begin()) * 8);
-}
+    uint64_t t = 1000000;
 
-static void BM_Parser_Sorter(benchmark::State &state) {
-    Parser parser;
-    ASSERT(std::filesystem::exists(TESTPATH), TESTPATH);
-    MemoryMap map(TESTPATH);
+    for (size_t i = 0; i < count; ++i) {
+        switch (pattern) {
+            case Pattern::Sequential:
+                t += 1000;
+                break;
 
-    std::array<Sink<MPMC>, 4> hit_consumers;
-    for (size_t i = 0; i < hit_consumers.size(); ++i) {
-        hit_consumers[i].start(parser.get_batch_handle().m_hit_queue[i]);
-    }
+            case Pattern::Backwards:
+                t += 1000;
+                if (i % 10000 == 5000)
+                    t -= 100000;
+                break;
 
-    constexpr int NUM_THREADS = 1;
-
-    std::array<std::unique_ptr<SPSC>, NUM_THREADS> sorted_trigger_queue{};
-
-    using SortT = Sort<MPMC, SPSC, Compare_Triggers>;
-    std::array<std::unique_ptr<SortT>, NUM_THREADS> trigger_sorter;
-    for (int i = 0; i < NUM_THREADS; ++i) {
-        sorted_trigger_queue[i] = std::make_unique<SPSC>(QUEUE_SIZE);
-        trigger_sorter[i] = std::make_unique<SortT>(
-            parser.get_batch_handle().m_trigger_queue, *sorted_trigger_queue[i],
-            parser.get_batch_handle().batch_pool);
-        trigger_sorter[i]->start_worker();
-    }
-
-    std::array<Sink<SPSC>, NUM_THREADS> trigger_consumers;
-    for (size_t i = 0; i < trigger_consumers.size(); ++i) {
-        trigger_consumers[i].start(*sorted_trigger_queue[i]);
-    }
-
-    for (auto _ : state) {
-        parser.parse(map);
-    }
-
-    state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
-                            (map.end() - map.begin()) * 8);
-}
-
-template <size_t NUM_THREADS>
-static void BM_Parser_S_Merger(benchmark::State &state) {
-    Parser parser;
-    ASSERT(std::filesystem::exists(TESTPATH), TESTPATH);
-    MemoryMap map(TESTPATH);
-
-    std::array<Sink<MPMC>, 4> hit_consumers;
-    for (size_t i = 0; i < hit_consumers.size(); ++i) {
-        hit_consumers[i].start(parser.get_batch_handle().m_hit_queue[i]);
-    }
-
-    std::array<std::unique_ptr<SPSC>, NUM_THREADS> sorted_trigger_queue{};
-
-    using SortT = Sort<MPMC, SPSC, Compare_Triggers>;
-    std::array<std::unique_ptr<SortT>, NUM_THREADS> trigger_sorter;
-    for (size_t i = 0; i < NUM_THREADS; ++i) {
-        sorted_trigger_queue[i] = std::make_unique<SPSC>(QUEUE_SIZE);
-        trigger_sorter[i] = std::make_unique<SortT>(
-            parser.get_batch_handle().m_trigger_queue, *sorted_trigger_queue[i],
-            parser.get_batch_handle().batch_pool);
-        trigger_sorter[i]->start_worker();
-    }
-
-    std::array<SPSC *, NUM_THREADS> ptrs;
-    for (size_t i = 0; i < NUM_THREADS; ++i) {
-        ptrs[i] = sorted_trigger_queue[i].get();
-    }
-    Merger<SPSC, Compare_Triggers, NUM_THREADS> merger(ptrs);
-
-    std::jthread sink([&merger](std::stop_token st) {
-        pthread_setname_np(pthread_self(), "Merger");
-        while (not st.stop_requested()) {
-            if (merger.front()) {
-                merger.pop();
-            }
+            case Pattern::Rollover:
+                t += ROLL_OVER_TIME / 100000;
+                t %= ROLL_OVER_TIME;
+                break;
         }
-    });
 
-    for (auto _ : state) {
-        parser.parse(map);
+        result.push_back(t);
     }
 
-    state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
-                            (map.end() - map.begin()) * 8);
+    return result;
 }
 
-static void BM_All() {
-    Parser parser;
-    ASSERT(std::filesystem::exists(TESTPATH), TESTPATH);
-    MemoryMap map(TESTPATH);
+// ------------------------------------------------------------
+// Single clock benchmark
+// ------------------------------------------------------------
 
-    // TODO hit path
-    std::array<Sink<MPMC>, 4> hit_consumers;
-    for (size_t i = 0; i < hit_consumers.size(); ++i) {
-        hit_consumers[i].start(parser.get_batch_handle().m_hit_queue[i]);
-    }
+template <Pattern P>
+static void BM_Clock(benchmark::State& state) {
+    constexpr size_t N = 4096;
+
+    const auto input = makeInput(N, P);
+
+    ClockCorrection<ROLL_OVER_TIME> clock;
+
+    size_t index = 0;
+    uint64_t result = 0;
 
     for (auto _ : state) {
-        parser.parse(map);
+        const uint64_t t = input[index];
+
+        index = (index + 1) & (N - 1);
+
+        result = clock.clock(t);
+
+        benchmark::DoNotOptimize(result);
     }
 
-    state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
-                            (map.end() - map.begin()) * 8);
+    state.SetItemsProcessed(state.iterations());
 }
 
-constexpr double MinTime = 1;
 
-BENCHMARK(BM_Parser)->Unit(benchmark::kSecond)->MinTime(MinTime);
-BENCHMARK(BM_Parser_Sorter)->Unit(benchmark::kSecond)->MinTime(MinTime);
-BENCHMARK(BM_Parser_S_Merger<2>)->Unit(benchmark::kSecond)->MinTime(MinTime);
-BENCHMARK(BM_Parser_S_Merger<4>)->Unit(benchmark::kSecond)->MinTime(MinTime);
-BENCHMARK(BM_Parser_S_Merger<8>)->Unit(benchmark::kSecond)->MinTime(MinTime);
-BENCHMARK(BM_Parser_S_Merger<16>)->Unit(benchmark::kSecond)->MinTime(MinTime);
+BENCHMARK_TEMPLATE(BM_Clock, Pattern::Sequential)
+    ->Name("Clock/Sequential");
 
+BENCHMARK_TEMPLATE(BM_Clock, Pattern::Backwards)
+    ->Name("Clock/Backwards");
+
+BENCHMARK_TEMPLATE(BM_Clock, Pattern::Rollover)
+    ->Name("Clock/Rollover");
 BENCHMARK_MAIN();

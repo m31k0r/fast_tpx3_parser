@@ -12,10 +12,10 @@ class Worker {
 public:
     Worker(Work t_work, InQueue& t_in, OutQueue& t_out)
         : in(t_in), out(t_out), work(std::move(t_work)) {
-        worker = std::jthread([this](std::stop_token stop_token) {
+        worker = std::jthread([this](const std::stop_token &stop_token) {
             pthread_setname_np(pthread_self(), "Worker");
+            uint64_t previous_seq_nr [[maybe_unused]] = 0;
             while (not stop_token.stop_requested()) {
-                uint64_t previous_seq_nr [[maybe_unused]] = 0;
                 U64BatchPtr ba;
                 if constexpr (MCQueueable<InQueue, U64BatchPtr>) {
                     in.try_pop(ba);
