@@ -30,13 +30,9 @@ add_library(mylib
         src/Parser.cpp
         src/QueueUtility/Extractor.cpp
         src/QueueUtility/Injector.cpp
-        src/Utility/bits.hpp
-        src/Operations/MergeSPSC.hpp
-        src/Parsing/ParseHits.hpp
-        src/Parsing/ParseHeader.hpp
-        src/Parsing/ParseTrigger.hpp
         src/Utility/AdaptivBackoff.cpp
         src/Utility/AdaptivBackoff.hpp
+        src/Parsing/Camera.cpp
 )
 
 target_include_directories(mylib
