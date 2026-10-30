@@ -28,10 +28,13 @@ add_library(mylib
         src/Utility/Memory_Map.cpp
         src/Parsing/tpx3_helper.cpp
         src/Parser.cpp
-        src/Sink.cpp
         src/QueueUtility/Extractor.cpp
         src/QueueUtility/Injector.cpp
         src/Utility/bits.hpp
+        src/Operations/MergeSPSC.hpp
+        src/Parsing/ParseHits.hpp
+        src/Parsing/ParseHeader.hpp
+        src/Parsing/ParseTrigger.hpp
 )
 
 target_include_directories(mylib
@@ -75,7 +78,7 @@ find_package(Catch2 3 REQUIRED)
 
 add_executable(unit_tests
         src/Batch/Batch_Pool_test.cpp
-        tests/tpx3_helper_test.cpp
+        src/Parsing/tpx3_helper_test.cpp
         src/QueueUtility/Extractor_test.cpp
         src/QueueUtility/Injector_test.cpp
         src/QueueUtility/Sequencer_test.cpp
@@ -98,6 +101,7 @@ catch_discover_tests(unit_tests)
 
 add_executable(benchmarks
         benchmarks/benchmark.cpp
+        src/Operations/Worker.hpp
 )
 
 target_link_libraries(benchmarks

@@ -5,8 +5,8 @@
 
 #include "Batch/Batch.hpp"
 #include "Constants.hpp"
-#include "Parsing/Parse.hpp"
 #include "QueueConcepts.hpp"
+#include "Parsing/ParseHits.hpp"
 
 
 template <typename InQueue, typename OutQueue, class Compare>

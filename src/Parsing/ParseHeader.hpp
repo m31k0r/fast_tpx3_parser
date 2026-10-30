@@ -1,65 +1,15 @@
 #pragma once
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <iterator>
+#include <ostream>
 #include <system_error>
-#include "Batch/Batch.hpp"
-#include "Batch/Batch_Pool.hpp"
-#include "../Utility/MPMCQueue.h"
-#include "../Utility/Memory_Map.hpp"
+#include <bits/error_constants.h>
+
+#include "Constants.hpp"
 #include "tpx3_helper.hpp"
-
-class ParseTrigger {
-    Batch_Pool<TriggerBatch> &batch_pool;
-
-   public:
-    TriggerBatchPtr parse(U64BatchPtr batch) {
-        TriggerBatchPtr out_batch = batch_pool.acquire_batch_blocking();
-        out_batch->sequence_number = batch->sequence_number;
-        for (auto u64 : *batch) {
-            auto trigger = tpx3_helper::Trigger(u64);
-            out_batch->push_back(trigger.get_toa(), 0, trigger.get_type());
-        }
-        return out_batch;
-    }
-
-    ParseTrigger(Batch_Pool<TriggerBatch> &t_batch_pool)
-        : batch_pool(t_batch_pool) {}
-};
-
-class ParseHit {
-    Batch_Pool<HitBatch> &batch_pool;
-
-   public:
-    HitBatchPtr parse(U64BatchPtr batch) {
-        HitBatchPtr out_batch = batch_pool.acquire_batch_blocking();
-        out_batch->sequence_number = batch->sequence_number;
-        for (auto u64 : *batch) {
-            auto hit = tpx3_helper::Hit(u64);
-            out_batch->toa[out_batch->size] = hit.get_toa();
-            out_batch->tot[out_batch->size] = hit.tot;
-            out_batch->x[out_batch->size] = hit.x;
-            out_batch->y[out_batch->size] = hit.y;
-            out_batch->size++;
-        }
-        return out_batch;
-    }
-
-    ParseHit(Batch_Pool<HitBatch> &t_batch_pool) : batch_pool(t_batch_pool) {}
-};
-
-void print_progress(std::size_t processed, std::size_t total) {
-    constexpr int width = 50;
-
-    const int progress =
-        total > 0 ? static_cast<int>(100.0 * processed / total) : 100;
-
-    const int filled = progress * width / 100;
-
-    std::cerr << "\rProgress: [";
-    for (int i = 0; i < width; ++i) {
-        std::cerr << (i < filled ? '#' : '-');
-    }
-
-    std::cerr << "] " << progress << '%' << std::flush;
-}
+#include "Utility/Memory_Map.hpp"
 
 template <typename Pusher>
 class ParseHeader {

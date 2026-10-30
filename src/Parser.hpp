@@ -16,10 +16,14 @@
 #include "Utility/Memory_Map.hpp"
 #include "Merging_Buffer.hpp"
 #include "Utility/SPSCQueue.h"
-#include "Sink.hpp"
+#include "Operations/Sink.hpp"
 #include "Sorter.hpp"
 #include "Utility/helper.hpp"
 #include "QueueUtility/Injector.hpp"
+#include "Operations/MergeSPSC.hpp"
+#include "Operations/Worker.hpp"
+#include "Parsing/ParseHeader.hpp"
+#include "Parsing/ParseTrigger.hpp"
 
 using U64MPMC = rigtorp::MPMCQueue<U64BatchPtr>;
 using U64SPSC = rigtorp::SPSCQueue<U64BatchPtr>;
@@ -94,111 +98,6 @@ struct BatchHandle {
 
     BatchHandle(const BatchHandle&) = delete;
     BatchHandle& operator=(const BatchHandle&) = delete;
-};
-
-#include "Parsing/Parse.hpp"
-
-template <class Work, class InQueue, class OutQueue>
-class Worker {
-    std::jthread worker;
-
-    InQueue& in;
-    OutQueue& out;
-    Work work;
-
-   public:
-    Worker(Work t_work, InQueue& t_in, OutQueue& t_out)
-        : in(t_in), out(t_out), work(std::move(t_work)) {
-        worker = std::jthread([this](std::stop_token stop_token) {
-            pthread_setname_np(pthread_self(), "Worker");
-            while (not stop_token.stop_requested()) {
-                uint64_t previous_seq_nr [[maybe_unused]] = 0;
-                U64BatchPtr ba;
-                if constexpr (MCQueueable<InQueue, U64BatchPtr>) {
-                    in.try_pop(ba);
-                } else {
-                    if (in.front()) {
-                        ba = std::move(*in.front());
-                        in.pop();
-                    }
-                }
-                if (ba) {
-                    const auto old_seq [[maybe_unused]] = ba->sequence_number;
-                    auto res = work.parse(std::move(ba));
-                    DEBUG_ASSERT(res);
-                    DEBUG_ASSERT(res->sequence_number == old_seq);
-                    DEBUG_ASSERT(previous_seq_nr == 0 ||
-                                 previous_seq_nr + 1 == res->sequence_number);
-                    previous_seq_nr = old_seq;
-                    adaptive_backoff backoff;
-                    while (not out.try_push(std::move(res))) {
-                        backoff.pause();
-                    }
-                }
-            }
-        });
-    }
-};
-template <class InQueue, size_t N, typename T>
-class SPSCs2SPSC {
-    T current_batch;
-    std::array<InQueue, N>& in;
-    size_t sequence_number = 0;
-
-    TriggerBatchPtr next_batch() {
-        auto front = in[sequence_number % N].front();
-        if (not front) {
-            return nullptr;
-        }
-
-        const auto front_seq_nr = front->get()->sequence_number;
-        if (front_seq_nr == sequence_number) {
-            TriggerBatchPtr batch = std::move(*front);
-            in[sequence_number % N].pop();
-            sequence_number++;
-            return batch;
-        }
-
-        while (in[sequence_number % N].front()) {
-            auto val = std::move(*in[sequence_number % N].front());
-            std::cout << val->sequence_number << std::endl;
-            in[sequence_number % N].pop();
-        }
-        PANIC(std::format("No match found but queue is not empty {}!={}",
-                          front_seq_nr, sequence_number));
-        return nullptr;
-    }
-
-   public:
-    SPSCs2SPSC(std::array<InQueue, N>& queues) : in(queues) {}
-
-    TriggerBatchPtr* front() {
-        if (not current_batch) {
-            current_batch = next_batch();
-        }
-        if (not current_batch) {
-            return nullptr;
-        }
-        return &current_batch;
-    };
-    void pop() {
-        DEBUG_ASSERT(current_batch,
-                     "Should not pop if current_batch is nullptr");
-        current_batch = nullptr;
-    };
-
-    void print_state() {
-        std::print("Seq: {}  -  ", sequence_number);
-        for (auto& queue : in) {
-            auto front = queue.front();
-            if (not front) {
-                std::print("Empty; ");
-                continue;
-            }
-            std::print("S:{}L:{}", front->get()->sequence_number, queue.size());
-        }
-        std::println();
-    };
 };
 
 template <size_t Trigger_Parse_Threads>

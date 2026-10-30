@@ -27,5 +27,4 @@ TEST_CASE("Injector", "[Injector]") {
         }
         spsc.pop();
     }
-
 }

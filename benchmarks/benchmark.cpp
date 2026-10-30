@@ -8,7 +8,7 @@
 #include "Merging_Buffer.hpp"
 #include "Parser.hpp"
 #include "Queue_Status.hpp"
-#include "Sink.hpp"
+#include "../src/Operations/Sink.hpp"
 #include "Sorter.hpp"
 
 using MPMC = rigtorp::MPMCQueue<U64BatchPtr>;
