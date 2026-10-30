@@ -47,6 +47,17 @@ Provide a TPX3 data file at that path before running the benchmark:
 
 No input data file is included in the repository.
 
+`parser_benchmarks` measures each stage and thread of the `Parser`
+pipeline (header dispatch, injector, trigger/hit parsing, sort and merge steps,
+hit and trigger mergers, sink, and the worker threads) using synthetic data, so
+it needs no input file:
+
+```sh
+./build/relwithdebinfo/parser_benchmarks --benchmark_filter='Merger|Sort'
+```
+
+Use a Release/RelWithDebInfo build for meaningful numbers.
+
 ## Documentation
 
 See [`docs/architecture.md`](docs/architecture.md) for component descriptions,

@@ -113,6 +113,16 @@ target_link_libraries(benchmarks
 )
 
 
+add_executable(parser_benchmarks
+        benchmarks/parser_benchmarks.cpp
+)
+
+target_link_libraries(parser_benchmarks
+        PRIVATE
+        mylib
+        benchmark::benchmark
+)
+
 add_executable(main src/main.cpp)
 
 target_link_libraries(main
