@@ -80,7 +80,6 @@ find_package(Catch2 3 REQUIRED)
 
 add_executable(unit_tests
         src/Batch/Batch_Pool_test.cpp
-        src/Parsing/tpx3_helper_test.cpp
         src/QueueUtility/Extractor_test.cpp
         src/QueueUtility/Injector_test.cpp
         src/QueueUtility/Sequencer_test.cpp
@@ -104,6 +103,11 @@ catch_discover_tests(unit_tests)
 add_executable(benchmarks
         benchmarks/benchmark.cpp
         src/Operations/Worker.hpp
+        benchmarks/bm_clock_correction.cpp
+        benchmarks/bm_parse_trigger.cpp
+        benchmarks/bm_sorter.cpp
+        benchmarks/bm_clock_correction.cpp
+        benchmarks/bm_sink.cpp
 )
 
 target_link_libraries(benchmarks
