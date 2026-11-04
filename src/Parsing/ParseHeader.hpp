@@ -1,15 +1,15 @@
 #pragma once
+#include <bits/error_constants.h>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <iterator>
 #include <ostream>
 #include <system_error>
-#include <bits/error_constants.h>
 
 #include "Constants.hpp"
-#include "tpx3_helper.hpp"
 #include "Utility/Memory_Map.hpp"
+#include "tpx3_helper.hpp"
 
 template <typename Pusher>
 class ParseHeader {
@@ -39,33 +39,30 @@ class ParseHeader {
         }
     };
     std::error_code parse(MemoryMap &t_mmap) {
-        for (size_t run = 0; run < num_runs; run++) {
-            const auto *running = t_mmap.begin();
-            // const auto total = std::distance(t_mmap.begin(), t_mmap.end());
-            // auto last_progress = 0;
-            while (std::next(running) < t_mmap.end()) {
-                auto opt = tpx3_helper::parse_header(running);
-                if (not opt) {
-                    return std::make_error_code(std::errc::io_error);
-                }
-                auto header = opt.value();
-                running = header.end;
-                if (header.end > t_mmap.end()) {
-                    return std::make_error_code(std::errc::invalid_seek);
-                }
-                parse_header(header);
-                // const auto processed = running - t_mmap.begin();
-                // const int progress =
-                //     total > 0 ? static_cast<int>(100.0 * processed / total)
-                //               : 100;
-                //
-                // if (progress != last_progress) {
-                //     print_progress(processed, total);
-                //     last_progress = progress;
-                // }
+        const auto *running = t_mmap.begin();
+        // const auto total = std::distance(t_mmap.begin(), t_mmap.end());
+        // auto last_progress = 0;
+        while (std::next(running) < t_mmap.end()) {
+            auto opt = tpx3_helper::parse_header(running);
+            if (not opt) {
+                return std::make_error_code(std::errc::io_error);
             }
-            std::cout << "." << std::flush;
-        };
+            auto header = opt.value();
+            running = header.end;
+            if (header.end > t_mmap.end()) {
+                return std::make_error_code(std::errc::invalid_seek);
+            }
+            parse_header(header);
+            // const auto processed = running - t_mmap.begin();
+            // const int progress =
+            //     total > 0 ? static_cast<int>(100.0 * processed / total)
+            //               : 100;
+            //
+            // if (progress != last_progress) {
+            //     print_progress(processed, total);
+            //     last_progress = progress;
+            // }
+        }
         return {};
     }
     ParseHeader(Pusher &batch_handle) : m_pusher(batch_handle) {}

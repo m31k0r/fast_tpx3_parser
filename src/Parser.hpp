@@ -3,27 +3,24 @@
 #include <chrono>
 #include <cstdint>
 #include <print>
-#include <ranges>
-#include <stop_token>
-#include <thread>
 #include <utility>
 #include "Batch/Batch.hpp"
 #include "Batch/Batch_Pool.hpp"
 #include "Compare.hpp"
 #include "Constants.hpp"
-#include "QueueUtility/Extractor.hpp"
-#include "Utility/MPMCQueue.h"
-#include "Utility/Memory_Map.hpp"
+#include "Operations/MergeSPSC.hpp"
 #include "Operations/Merging_Buffer.hpp"
-#include "Utility/SPSCQueue.h"
 #include "Operations/Sink.hpp"
 #include "Operations/Sorter.hpp"
-#include "Utility/helper.hpp"
-#include "QueueUtility/Injector.hpp"
-#include "Operations/MergeSPSC.hpp"
 #include "Operations/Worker.hpp"
 #include "Parsing/ParseHeader.hpp"
 #include "Parsing/ParseTrigger.hpp"
+#include "QueueUtility/Extractor.hpp"
+#include "QueueUtility/Injector.hpp"
+#include "Utility/MPMCQueue.h"
+#include "Utility/Memory_Map.hpp"
+#include "Utility/SPSCQueue.h"
+#include "Utility/helper.hpp"
 
 using U64MPMC = rigtorp::MPMCQueue<U64BatchPtr>;
 using U64SPSC = rigtorp::SPSCQueue<U64BatchPtr>;
@@ -38,7 +35,6 @@ using U64InjSP = Injector<U64SPSC, U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>;
 template <size_t N>
 using U64InjSPA = Injector<std::array<U64SPSC, N>, U64BatchPtr,
                            Batch_Pool<U64Batch>, uint64_t>;
-
 
 template <std::size_t N>
 struct Pusher {
@@ -133,7 +129,7 @@ class Parser {
         make_array_l<Sort_t>(std::make_index_sequence<4>{}, [this](int i) {
             return Sort_t(m_batch_handle.hit_queue[i],
                           m_batch_handle.sorted_hit_queue[i],
-                          m_batch_handle.Hitbatch_pool,camera_);
+                          m_batch_handle.Hitbatch_pool, camera_);
         });
     Merger merger{m_batch_handle.Hitbatch_pool,
                   make_array_l<Extractor<HitSPSC, HitBatchPtr>>(
@@ -156,17 +152,5 @@ class Parser {
         merger.set_stop_token(hit_sink.get_stop_token());
         trigger_sink.start(trigger_out_queue);
     };
-    void parse() {
-        const auto start = std::chrono::steady_clock::now();
-        auto ec [[maybe_unused]] = header.parse(map);
-        const auto stop = std::chrono::steady_clock::now();
-        const auto file_size_gb =
-            std::distance(map.begin(), map.end()) * sizeof(uint64_t) * 1e-9;
-        const auto time_s = std::chrono::duration<double>(stop - start).count();
-
-        std::cout << "Filesize: " << file_size_gb << " Gb" << std::endl;
-        std::cout << "Time: " << time_s << " s" << std::endl;
-        std::cout << "Throughput: " << file_size_gb / time_s * num_runs
-                  << " Gb/s" << std::endl;
-    }
+    void parse() { auto ec [[maybe_unused]] = header.parse(map); }
 };
