@@ -28,6 +28,8 @@ class Merger {
             for (int chip_nr = 0; chip_nr < 4; ++chip_nr) {
                 adaptive_backoff backoff;
                 while (not extractors[chip_nr].front()) {
+                    // Keep other producers from blocking on full queues
+                    for (auto& e : extractors) e.drain();
                     backoff.pause();
                     if (stop.stop_requested()) {
                         return;
