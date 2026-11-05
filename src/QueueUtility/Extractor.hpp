@@ -2,14 +2,14 @@
 #include <assert.hpp>
 
 #include "../Batch/Batch.hpp"
-#include "QueueConcepts.hpp"
 #include "Constants.hpp"
+#include "QueueConcepts.hpp"
 
-template<typename InQueue, typename BatchPtr>
+template <typename InQueue, typename BatchPtr>
     requires SCQueueable<InQueue, BatchPtr>
 
 class Extractor {
-    class Iterator {
+    class HitIterator {
         BatchPtr *batch;
         size_t idx;
 
@@ -37,35 +37,60 @@ class Extractor {
             return (*batch)->y[idx];
         }
 
-    public:
-        explicit operator bool() const noexcept {
-            DEBUG_ASSERT(batch);
-            return batch != nullptr;
-        }
+       public:
+        explicit operator bool() const noexcept { return batch != nullptr; }
 
-        Iterator(BatchPtr *batch, size_t idx) : batch(batch), idx(idx) {
-        }
+        HitIterator(BatchPtr *batch, size_t idx) : batch(batch), idx(idx) {}
 
         uint64_t toa() const { return get_toa(); }
         uint64_t tot() const { return get_tot(); }
         uint16_t x() const { return get_x(); }
         uint16_t y() const { return get_y(); }
     };
+    class TriggerIterator {
+        BatchPtr *batch;
+        size_t idx;
+
+        [[nodiscard]] uint64_t get_toa() const {
+            DEBUG_ASSERT(batch);
+            DEBUG_ASSERT(idx < BATCH_SIZE);
+            return (*batch)->toa[idx];
+        }
+
+        [[nodiscard]] uint8_t get_type() const {
+            DEBUG_ASSERT(batch);
+            DEBUG_ASSERT(idx < BATCH_SIZE);
+            return (*batch)->type[idx];
+        }
+
+       public:
+        explicit operator bool() const noexcept { return batch != nullptr; }
+
+        TriggerIterator(BatchPtr *batch, size_t idx) : batch(batch), idx(idx) {}
+
+        uint64_t toa() const { return get_toa(); }
+        uint8_t type() const { return get_type(); }
+    };
 
     struct U64Iterator {
         uint64_t *ptr = nullptr;
 
         U64Iterator(const BatchPtr *batch, size_t idx) {
-            if (batch) { ptr = &(*batch)->data[idx]; }
+            if (batch) {
+                ptr = &(*batch)->data[idx];
+            }
         }
-        uint64_t operator* () const {
+        uint64_t operator*() const {
             DEBUG_ASSERT(ptr);
             return *ptr;
         }
         explicit operator bool() const noexcept { return ptr != nullptr; }
     };
 
-    using IteratorType = std::conditional_t<std::is_same_v<BatchPtr, HitBatchPtr>, Iterator, U64Iterator>;
+    using IteratorType = std::conditional_t<
+        std::is_same_v<BatchPtr, HitBatchPtr>, HitIterator,
+        std::conditional_t<std::is_same_v<BatchPtr, TriggerBatchPtr>,
+                           TriggerIterator, U64Iterator>>;
 
     InQueue &queue;
     size_t read_idx = 0;
@@ -81,7 +106,7 @@ class Extractor {
         return nullptr;
     }
 
-public:
+   public:
     Extractor(InQueue &queue) : queue(queue) {}
 
     IteratorType front() {
@@ -91,7 +116,7 @@ public:
         if (not current_batch) {
             return IteratorType(nullptr, 0);
         }
-        if (read_idx >= current_batch->size ) {
+        if (read_idx >= current_batch->size) {
             current_batch = next_batch();
             if (not current_batch) {
                 return IteratorType(nullptr, 0);
@@ -102,7 +127,8 @@ public:
 
     void pop() {
         DEBUG_ASSERT(current_batch);
-        DEBUG_ASSERT(read_idx < current_batch->size );
+        DEBUG_ASSERT(read_idx < current_batch->size);
         read_idx++;
     };
+    size_t size() { return queue.size(); }
 };

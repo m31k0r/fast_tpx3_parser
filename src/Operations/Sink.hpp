@@ -6,19 +6,24 @@
 template <typename Queue, typename BatchPtr>
 class Sink {
     std::jthread m_thread;
+    size_t counter = 0;
 
    public:
     std::stop_token get_stop_token() { return m_thread.get_stop_token(); }
     void operator()(Queue &queue)
-        requires SCQueueable<Queue, BatchPtr>||MCQueueable<Queue, BatchPtr> {
-            if constexpr (MCQueueable<Queue, BatchPtr>) {
-                BatchPtr batch;
-                queue.try_pop(batch);
-            } else {
-                if (queue.front()) {
-                    queue.pop();
-                }
+        requires SCQueueable<Queue, BatchPtr> || MCQueueable<Queue, BatchPtr>
+    {
+        if constexpr (MCQueueable<Queue, BatchPtr>) {
+            BatchPtr batch;
+            if (queue.try_pop(batch)) {
+                counter++;
             }
+        } else {
+            if (queue.front()) {
+                queue.pop();
+                counter++;
+            }
+        }
     }
 
     void start(Queue &queue) {
@@ -29,4 +34,5 @@ class Sink {
             }
         });
     }
+    ~Sink() { std::cout << "Received " << counter << " batches\n"; }
 };

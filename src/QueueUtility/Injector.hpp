@@ -1,8 +1,11 @@
 #pragma once
-#include "QueueUtility/Sequencer.hpp"
+#include <libassert/assert.hpp>
+#include <type_traits>
+
 #include "Constants.hpp"
 #include "QueueConcepts.hpp"
-template<typename OutQueue, typename BatchPtr, typename BatchPool, typename T>
+#include "QueueUtility/Sequencer.hpp"
+template <typename OutQueue, typename BatchPtr, typename BatchPool, typename T>
 
 class Injector {
     OutQueue &queue;
@@ -23,35 +26,35 @@ class Injector {
             }
         } else {
             if (not queue[current_batch->sequence_number % queue.size()]
-                .try_push(std::move(current_batch))) {
+                        .try_push(std::move(current_batch))) {
                 return false;
-                }
+            }
         }
         return true;
     }
 
-public:
-    Injector(OutQueue &queue, BatchPool &pool) : queue(queue), pool(pool) {
-    }
+   public:
+    Injector(OutQueue &queue, BatchPool &pool) : queue(queue), pool(pool) {}
 
-    bool try_push(T val) {
-        if (not current_batch) {
-            current_batch = next_batch();
-        }
-
-        if (current_batch->size >= BATCH_SIZE) {
-            auto old_seq [[maybe_unused]] = current_batch->sequence_number;
-            if (not inject()) return false;
-            current_batch = next_batch();
-            DEBUG_ASSERT(current_batch->size == 0,
-                         "New Batch should have zero size");
-            DEBUG_ASSERT(old_seq + 1 == current_batch->sequence_number,
-                         "Sequence should be kept");
-        }
-
-        current_batch->data[current_batch->size] = std::forward<T>(val);
-        current_batch->size++;
-
-        return true;
-    }
+    bool try_push(T val);
 };
+
+template <typename OutQueue, typename BatchPtr, typename BatchPool, typename T>
+inline bool Injector<OutQueue, BatchPtr, BatchPool, T>::try_push(T val) {
+    if (not current_batch) {
+        current_batch = next_batch();
+    }
+
+    if (current_batch->size >= BATCH_SIZE) {
+        auto old_seq [[maybe_unused]] = current_batch->sequence_number;
+        if (not inject()) return false;
+        current_batch = next_batch();
+        DEBUG_ASSERT(current_batch->size == 0,
+                     "New Batch should have zero size");
+        DEBUG_ASSERT(old_seq + 1 == current_batch->sequence_number,
+                     "Sequence should be kept");
+    }
+
+    current_batch->push_back(val);
+    return true;
+}

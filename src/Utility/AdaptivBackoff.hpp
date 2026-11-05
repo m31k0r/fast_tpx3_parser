@@ -13,7 +13,7 @@ class adaptive_backoff {
 
     static void cpu_relax() noexcept;
 
-public:
+   public:
     void pause() noexcept;
 
     void reset() noexcept { failures_ = 0; }

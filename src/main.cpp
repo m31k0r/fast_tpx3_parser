@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-constexpr auto num_runs = 100;
+constexpr auto num_runs = 50;
 
 void printHistogram(const std::vector<double>& runtimes, int numBuckets = 10,
                     const std::string& unit = "ms") {
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     MemoryMap mmap(filename);
     const auto file_size_gb =
         std::distance(mmap.begin(), mmap.end()) * sizeof(uint64_t) * 1e-9;
-    Parser<2> parser(std::move(mmap));
+    Parser<4> parser(std::move(mmap));
     std::cout << "Starting parsing" << std::endl;
     std::vector<double> time_per_run;
     for (int i = 0; i < num_runs; ++i) {

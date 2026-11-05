@@ -1,5 +1,10 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
+#include <iostream>
+#include <print>
+
 template <class InQueue, size_t N, typename T>
 class SPSCs2SPSC {
     T current_batch;
@@ -30,7 +35,7 @@ class SPSCs2SPSC {
         return nullptr;
     }
 
-public:
+   public:
     SPSCs2SPSC(std::array<InQueue, N>& queues) : in(queues) {}
 
     T* front() {
@@ -60,4 +65,10 @@ public:
         }
         std::println();
     };
+    size_t size() {
+        auto min = std::min_element(
+            in.begin(), in.end(),
+            [](auto& e1, auto& e2) { return e1.size() < e2.size(); });
+        return min->size();
+    }
 };

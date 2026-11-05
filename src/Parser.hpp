@@ -8,6 +8,7 @@
 #include "Batch/Batch_Pool.hpp"
 #include "Compare.hpp"
 #include "Constants.hpp"
+#include "Operations/Delay.hpp"
 #include "Operations/MergeSPSC.hpp"
 #include "Operations/Merging_Buffer.hpp"
 #include "Operations/Sink.hpp"
@@ -40,20 +41,27 @@ template <std::size_t N>
 struct Pusher {
     std::array<U64InjSP, 4> hit_inj;
     U64InjSPA<N> trigger_inj;
+    size_t H = 0;
+    size_t T = 0;
 
     void insert_hit(uint64_t data, uint8_t t_chip_nr) {
         DEBUG_ASSERT(t_chip_nr < 4);
         adaptive_backoff backoff;
         while (not hit_inj[t_chip_nr].try_push(data)) {
             backoff.pause();
+            H++;
         }
     }
     void insert_trigger(uint64_t data) {
         adaptive_backoff backoff;
         while (not trigger_inj.try_push(data)) {
             backoff.pause();
+            T++;
         }
     };
+    ~Pusher() {
+        std::cout << "Backoff: " << H << " Hit & " << T << " Trigger\n";
+    }
 
     Pusher(std::array<U64SPSC, 4>& hit_queue,
            std::array<U64SPSC, N>& trigger_queue,
@@ -131,6 +139,7 @@ class Parser {
                           m_batch_handle.sorted_hit_queue[i],
                           m_batch_handle.Hitbatch_pool, camera_);
         });
+
     Merger merger{m_batch_handle.Hitbatch_pool,
                   make_array_l<Extractor<HitSPSC, HitBatchPtr>>(
                       std::make_index_sequence<4>{}, [this](size_t i) {
@@ -141,13 +150,26 @@ class Parser {
     // Temporary Sinks;
     Sink<Merger, HitBatchPtr> hit_sink;
     Sink<TriggerMerger, TriggerBatchPtr> trigger_sink;
+    //
+    //
+    // HitSPSC out_queue{QUEUE_SIZE};
+    // Delay<Merger, TriggerMerger, HitSPSC> delay;
+    // Sink<HitSPSC, HitBatchPtr> sink;
 
    public:
     Parser(MemoryMap t_map)
-        : header(m_batch_handle.pusher), map(std::move(t_map)) {
+        : header(m_batch_handle.pusher),
+          map(std::move(t_map))
+    // delay(merger, trigger_out_queue, out_queue,
+    //       m_batch_handle.Hitbatch_pool)
+    {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
+            // sinks[i].start(m_batch_handle.sorted_hit_queue[i]);
         }
+        // sink.start(out_queue);
+        // merger.set_stop_token(sink.get_stop_token());
+        // o
         hit_sink.start(merger);
         merger.set_stop_token(hit_sink.get_stop_token());
         trigger_sink.start(trigger_out_queue);

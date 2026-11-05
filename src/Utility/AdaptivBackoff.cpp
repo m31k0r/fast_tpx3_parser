@@ -1,5 +1,8 @@
 #include "AdaptivBackoff.hpp"
 #include <xmmintrin.h>
+#include <assert.hpp>
+#include <iostream>
+#include <stacktrace>
 #include <thread>
 
 void adaptive_backoff::cpu_relax() noexcept {
@@ -27,5 +30,6 @@ void adaptive_backoff::pause() noexcept {
     }
 
     if (failures_ < yield_limit + 160) ++failures_;
-
+    if (failures_ == yield_limit + 155)
+        std::cout << libassert::stacktrace() << std::endl;
 }

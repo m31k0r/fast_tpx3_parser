@@ -5,9 +5,9 @@
 
 #include "../Batch/Batch.hpp"
 #include "../Constants.hpp"
-#include "../QueueUtility/QueueConcepts.hpp"
 #include "../Parsing/ParseHits.hpp"
-
+#include "../QueueUtility/QueueConcepts.hpp"
+#include "Utility/AdaptivBackoff.hpp"
 
 template <typename InQueue, typename OutQueue, class Compare>
     requires SCQueueable<InQueue, U64BatchPtr> &&
@@ -27,7 +27,7 @@ class Sort {
          Batch_Pool<HitBatch> &pool, Camera &camera)
         : m_hit_queue(input_queue),
           m_sorted_hit_queue(output_queue),
-          parsehit(pool,camera) {}
+          parsehit(pool, camera) {}
 
     void start_worker() {
         m_thread = std::jthread([this](std::stop_token stop) {
@@ -40,6 +40,7 @@ class Sort {
                         std::move(batch->begin(), batch->end(),
                                   buffer_.begin() + BATCH_SIZE);
                         m_hit_queue.pop();
+                        buffer_filled = true;
                     }
                 } else if (m_hit_queue.front()) {
                     U64BatchPtr batch = std::move(*m_hit_queue.front());
@@ -56,8 +57,10 @@ class Sort {
                     // std::for_each(batch->begin(), batch->end(), Parse());
                     HitBatchPtr hit_batch = parsehit.parse(std::move(batch));
 
+                    adaptive_backoff backoff;
                     while (
                         not m_sorted_hit_queue.try_push(std::move(hit_batch))) {
+                        backoff.pause();
                         if (stop.stop_requested()) {
                             return;
                         }
