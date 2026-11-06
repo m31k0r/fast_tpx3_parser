@@ -36,7 +36,10 @@ class Injector {
 
    public:
     Injector(OutQueue &queue, BatchPool &pool) : queue(queue), pool(pool) {}
-
+    void flush() {
+        while (not inject()) {
+        }
+    };
     bool try_push(T val);
 };
 

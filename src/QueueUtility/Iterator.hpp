@@ -61,15 +61,14 @@ class TriggerIterator {
    public:
     explicit operator bool() const noexcept { return batch != nullptr; }
 
-    TriggerIterator(TriggerBatch *batch, size_t idx)
-        : batch(batch), idx(idx) {}
+    TriggerIterator(TriggerBatch *batch, size_t idx) : batch(batch), idx(idx) {}
 
     uint64_t toa() const { return get_toa(); }
     uint8_t type() const { return get_type(); }
 };
 
 struct U64Iterator {
-    uint64_t *ptr = nullptr;
+    const uint64_t *ptr = nullptr;
 
     U64Iterator(const U64Batch *batch, size_t idx) {
         if (batch) {

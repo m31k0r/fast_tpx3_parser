@@ -1,3 +1,4 @@
+#include <chrono>
 #include <iostream>
 #include <numeric>
 #include "Parser.hpp"
@@ -9,9 +10,10 @@
 #include <iostream>
 #include <numeric>
 #include <string>
+#include <thread>
 #include <vector>
 
-constexpr auto num_runs = 50;
+constexpr auto num_runs = 5;
 
 void printHistogram(const std::vector<double>& runtimes, int numBuckets = 10,
                     const std::string& unit = "ms") {
@@ -102,5 +104,6 @@ int main(int argc, char* argv[]) {
     }
 
     printHistogram(time_per_run, 10, "Gb/s");
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     return 0;
 }

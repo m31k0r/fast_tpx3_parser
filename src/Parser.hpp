@@ -41,26 +41,33 @@ template <std::size_t N>
 struct Pusher {
     std::array<U64InjSP, 4> hit_inj;
     U64InjSPA<N> trigger_inj;
-    size_t H = 0;
-    size_t T = 0;
+    size_t H_backoff = 0;
+    size_t T_backoff = 0;
+    size_t H_event = 0;
+    size_t T_event = 0;
 
     void insert_hit(uint64_t data, uint8_t t_chip_nr) {
-        DEBUG_ASSERT(t_chip_nr < 4);
-        adaptive_backoff backoff;
-        while (not hit_inj[t_chip_nr].try_push(data)) {
-            backoff.pause();
-            H++;
-        }
+        // DEBUG_ASSERT(t_chip_nr < 4);
+        // adaptive_backoff backoff;
+        // while (not hit_inj[t_chip_nr].try_push(data)) {
+        //     backoff.pause();
+        //     H_backoff++;
+        // }
+        // H_event++;
     }
     void insert_trigger(uint64_t data) {
         adaptive_backoff backoff;
         while (not trigger_inj.try_push(data)) {
             backoff.pause();
-            T++;
+            T_backoff++;
         }
+        T_event++;
     };
     ~Pusher() {
-        std::cout << "Backoff: " << H << " Hit & " << T << " Trigger\n";
+        std::cout << "Backoff: " << H_backoff << " Hit & " << T_backoff
+                  << " Trigger\n";
+        std::cout << "Events: " << H_event << " Hits " << T_event
+                  << " Trigger\n";
     }
 
     Pusher(std::array<U64SPSC, 4>& hit_queue,
@@ -132,13 +139,15 @@ class Parser {
     TriggerMerger trigger_out_queue{m_batch_handle.parsed_triggers};
 
     // Hits
-    using Sort_t = Sort<U64SPSC, HitSPSC, Compare_Hits>;
+    using Sort_t = Sort<U64SPSC, HitSPSC>;
     std::array<Sort_t, 4> sort_hits =
         make_array_l<Sort_t>(std::make_index_sequence<4>{}, [this](int i) {
             return Sort_t(m_batch_handle.hit_queue[i],
                           m_batch_handle.sorted_hit_queue[i],
                           m_batch_handle.Hitbatch_pool, camera_);
         });
+
+    // std::array<Sink<HitSPSC, HitBatchPtr>, 4> sinks;
 
     Merger merger{m_batch_handle.Hitbatch_pool,
                   make_array_l<Extractor<HitSPSC, HitBatchPtr>>(
@@ -148,30 +157,36 @@ class Parser {
                       })};
 
     // Temporary Sinks;
-    // Sink<Merger, HitBatchPtr> hit_sink;
-    // Sink<TriggerMerger, TriggerBatchPtr> trigger_sink;
+    Sink<Merger, HitBatchPtr> hit_sink;
+    Sink<TriggerMerger, TriggerBatchPtr> trigger_sink;
     //
     //
-    HitSPSC out_queue{QUEUE_SIZE};
-    Delay<Merger, TriggerMerger, HitSPSC> delay;
-    Sink<HitSPSC, HitBatchPtr> sink;
+    // HitSPSC out_queue{QUEUE_SIZE};
+    // Delay<Merger, TriggerMerger, HitSPSC> delay;
+    // Sink<HitSPSC, HitBatchPtr> sink;
 
    public:
     Parser(MemoryMap t_map)
         : header(m_batch_handle.pusher),
-          map(std::move(t_map)),
-          delay(merger, trigger_out_queue, out_queue,
-                m_batch_handle.Hitbatch_pool) {
+          map(std::move(t_map))
+    // delay(merger, trigger_out_queue, out_queue,
+    //       m_batch_handle.Hitbatch_pool) {
+    {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
             // sinks[i].start(m_batch_handle.sorted_hit_queue[i]);
         }
-        sink.start(out_queue);
-        merger.set_stop_token(sink.get_stop_token());
+        // sink.start(out_queue);
+        // merger.set_stop_token(sink.get_stop_token());
         // o
-        // hit_sink.start(merger);
-        // merger.set_stop_token(hit_sink.get_stop_token());
-        // trigger_sink.start(trigger_out_queue);
+        hit_sink.start(merger);
+        merger.set_stop_token(hit_sink.get_stop_token());
+        trigger_sink.start(trigger_out_queue);
     };
-    void parse() { auto ec [[maybe_unused]] = header.parse(map); }
+    void parse() {
+        auto ec [[maybe_unused]] = header.parse(map);
+        std::ranges::for_each(m_batch_handle.pusher.hit_inj,
+                              [](auto& inj) { inj.flush(); });
+        m_batch_handle.pusher.trigger_inj.flush();
+    }
 };

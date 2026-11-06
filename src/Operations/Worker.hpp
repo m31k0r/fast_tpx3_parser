@@ -37,6 +37,7 @@ class Worker {
                     adaptive_backoff backoff;
                     while (not out.try_push(std::move(res))) {
                         backoff.pause();
+                        if (stop_token.stop_requested()) return;
                     }
                 }
             }

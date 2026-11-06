@@ -23,8 +23,6 @@ class Extractor {
 
     InQueue &queue;
     size_t read_idx = 0;
-    using Batch = typename BatchPtr::element_type;
-    using OwnedBatchPtr = std::unique_ptr<Batch>;
 
     OwnedBatchPtr current_batch;
 
