@@ -1,6 +1,8 @@
 #pragma once
 #include <assert.hpp>
 #include <deque>
+#include <memory>
+#include <type_traits>
 
 #include "../Batch/Batch.hpp"
 #include "Constants.hpp"
@@ -10,8 +12,11 @@ template <typename InQueue, typename BatchPtr>
     requires SCQueueable<InQueue, BatchPtr>
 
 class Extractor {
+    using Batch = typename BatchPtr::element_type;
+    using OwnedBatchPtr = std::unique_ptr<Batch>;
+
     class HitIterator {
-        BatchPtr *batch;
+        OwnedBatchPtr *batch;
         size_t idx;
 
         [[nodiscard]] uint64_t get_toa() const {
@@ -41,7 +46,7 @@ class Extractor {
        public:
         explicit operator bool() const noexcept { return batch != nullptr; }
 
-        HitIterator(BatchPtr *batch, size_t idx) : batch(batch), idx(idx) {}
+        HitIterator(OwnedBatchPtr *batch, size_t idx) : batch(batch), idx(idx) {}
 
         uint64_t toa() const { return get_toa(); }
         uint64_t tot() const { return get_tot(); }
@@ -49,7 +54,7 @@ class Extractor {
         uint16_t y() const { return get_y(); }
     };
     class TriggerIterator {
-        BatchPtr *batch;
+        OwnedBatchPtr *batch;
         size_t idx;
 
         [[nodiscard]] uint64_t get_toa() const {
@@ -67,7 +72,8 @@ class Extractor {
        public:
         explicit operator bool() const noexcept { return batch != nullptr; }
 
-        TriggerIterator(BatchPtr *batch, size_t idx) : batch(batch), idx(idx) {}
+        TriggerIterator(OwnedBatchPtr *batch, size_t idx)
+            : batch(batch), idx(idx) {}
 
         uint64_t toa() const { return get_toa(); }
         uint8_t type() const { return get_type(); }
@@ -76,7 +82,7 @@ class Extractor {
     struct U64Iterator {
         uint64_t *ptr = nullptr;
 
-        U64Iterator(const BatchPtr *batch, size_t idx) {
+        U64Iterator(const OwnedBatchPtr *batch, size_t idx) {
             if (batch) {
                 ptr = &(*batch)->data[idx];
             }
@@ -95,19 +101,19 @@ class Extractor {
 
     InQueue &queue;
     size_t read_idx = 0;
-    BatchPtr current_batch;
+    OwnedBatchPtr current_batch;
 
-    std::deque<BatchPtr> overflow;
+    std::deque<OwnedBatchPtr> overflow;
 
-    BatchPtr next_batch() {
+    OwnedBatchPtr next_batch() {
         if (not overflow.empty()) {
             auto tmp = std::move(overflow.front());
             overflow.pop_front();
             read_idx = 0;
             return tmp;
         }
-        if (queue.front()) {
-            auto tmp = std::move(*queue.front());
+        if (auto *queued = queue.front()) {
+            auto tmp = std::make_unique<Batch>(**queued);
             queue.pop();
             read_idx = 0;
             return tmp;
@@ -139,11 +145,11 @@ class Extractor {
         DEBUG_ASSERT(read_idx < current_batch->size);
         read_idx++;
     };
-    // Moves all queued batches into an unbounded local buffer so the
-    // producer never blocks on a full queue.
+    // Copy queued batches into an unbounded local buffer, returning the
+    // originals to the pool so the producer can continue.
     void drain() {
-        while (queue.front()) {
-            overflow.push_back(std::move(*queue.front()));
+        while (auto *queued = queue.front()) {
+            overflow.push_back(std::make_unique<Batch>(**queued));
             queue.pop();
         }
     }
