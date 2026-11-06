@@ -3,91 +3,14 @@
 #include <deque>
 
 #include "../Batch/Batch.hpp"
-#include "Constants.hpp"
 #include "QueueConcepts.hpp"
+
+#include "Iterator.hpp"
 
 template <typename InQueue, typename BatchPtr>
     requires SCQueueable<InQueue, BatchPtr>
 
 class Extractor {
-    class HitIterator {
-        BatchPtr *batch;
-        size_t idx;
-
-        [[nodiscard]] uint64_t get_toa() const {
-            DEBUG_ASSERT(batch);
-            DEBUG_ASSERT(idx < BATCH_SIZE);
-            return (*batch)->toa[idx];
-        }
-
-        [[nodiscard]] uint64_t get_tot() const {
-            DEBUG_ASSERT(batch);
-            DEBUG_ASSERT(idx < BATCH_SIZE);
-            return (*batch)->tot[idx];
-        }
-
-        [[nodiscard]] uint16_t get_x() const {
-            DEBUG_ASSERT(batch);
-            DEBUG_ASSERT(idx < BATCH_SIZE);
-            return (*batch)->x[idx];
-        }
-
-        [[nodiscard]] uint16_t get_y() const {
-            DEBUG_ASSERT(batch);
-            DEBUG_ASSERT(idx < BATCH_SIZE);
-            return (*batch)->y[idx];
-        }
-
-       public:
-        explicit operator bool() const noexcept { return batch != nullptr; }
-
-        HitIterator(BatchPtr *batch, size_t idx) : batch(batch), idx(idx) {}
-
-        uint64_t toa() const { return get_toa(); }
-        uint64_t tot() const { return get_tot(); }
-        uint16_t x() const { return get_x(); }
-        uint16_t y() const { return get_y(); }
-    };
-    class TriggerIterator {
-        BatchPtr *batch;
-        size_t idx;
-
-        [[nodiscard]] uint64_t get_toa() const {
-            DEBUG_ASSERT(batch);
-            DEBUG_ASSERT(idx < BATCH_SIZE);
-            return (*batch)->toa[idx];
-        }
-
-        [[nodiscard]] uint8_t get_type() const {
-            DEBUG_ASSERT(batch);
-            DEBUG_ASSERT(idx < BATCH_SIZE);
-            return (*batch)->type[idx];
-        }
-
-       public:
-        explicit operator bool() const noexcept { return batch != nullptr; }
-
-        TriggerIterator(BatchPtr *batch, size_t idx) : batch(batch), idx(idx) {}
-
-        uint64_t toa() const { return get_toa(); }
-        uint8_t type() const { return get_type(); }
-    };
-
-    struct U64Iterator {
-        uint64_t *ptr = nullptr;
-
-        U64Iterator(const BatchPtr *batch, size_t idx) {
-            if (batch) {
-                ptr = &(*batch)->data[idx];
-            }
-        }
-        uint64_t operator*() const {
-            DEBUG_ASSERT(ptr);
-            return *ptr;
-        }
-        explicit operator bool() const noexcept { return ptr != nullptr; }
-    };
-
     using IteratorType = std::conditional_t<
         std::is_same_v<BatchPtr, HitBatchPtr>, HitIterator,
         std::conditional_t<std::is_same_v<BatchPtr, TriggerBatchPtr>,
@@ -103,12 +26,6 @@ class Extractor {
         if (not overflow.empty()) {
             auto tmp = std::move(overflow.front());
             overflow.pop_front();
-            read_idx = 0;
-            return tmp;
-        }
-        if (queue.front()) {
-            auto tmp = std::move(*queue.front());
-            queue.pop();
             read_idx = 0;
             return tmp;
         }
@@ -142,7 +59,7 @@ class Extractor {
     // Moves all queued batches into an unbounded local buffer so the
     // producer never blocks on a full queue.
     void drain() {
-        while (queue.front()) {
+        if (queue.front()) {
             overflow.push_back(std::move(*queue.front()));
             queue.pop();
         }

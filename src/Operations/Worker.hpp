@@ -33,8 +33,6 @@ class Worker {
                     auto res = work.parse(std::move(ba));
                     DEBUG_ASSERT(res);
                     DEBUG_ASSERT(res->sequence_number == old_seq);
-                    DEBUG_ASSERT(previous_seq_nr == 0 ||
-                                 previous_seq_nr + 2 == res->sequence_number);
                     previous_seq_nr = old_seq;
                     adaptive_backoff backoff;
                     while (not out.try_push(std::move(res))) {

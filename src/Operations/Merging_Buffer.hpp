@@ -9,7 +9,6 @@
 #include "../Constants.hpp"
 #include "../QueueUtility/Extractor.hpp"
 #include "../Utility/SPSCQueue.h"
-#include "Utility/AdaptivBackoff.hpp"
 
 class Merger {
     std::array<Extractor<rigtorp::SPSCQueue<HitBatchPtr>, HitBatchPtr>, 4>
@@ -17,34 +16,36 @@ class Merger {
 
     HitBatchPtr current_batch;
     Batch_Pool<HitBatch>& batch_pool;
-    void fill_batch() {
-        DEBUG_ASSERT(not current_batch);
-        current_batch = batch_pool.acquire_batch_blocking();
 
-        for (size_t i = 0; i < BATCH_SIZE; ++i) {
-            uint64_t earliest_time = std::numeric_limits<uint64_t>::max();
-            uint8_t earliest_chip = 0;
-
-            for (int chip_nr = 0; chip_nr < 4; ++chip_nr) {
-                adaptive_backoff backoff;
-                while (not extractors[chip_nr].front()) {
-                    // Keep other producers from blocking on full queues
-                    for (auto& e : extractors) e.drain();
-                    backoff.pause();
-                    if (stop.stop_requested()) {
-                        return;
-                    }
-                }
-                auto hit = extractors[chip_nr].front();
-                if (hit.toa() < earliest_time) {
-                    earliest_time = hit.toa();
-                    earliest_chip = chip_nr;
-                }
+    int next_time() {
+        uint64_t earliest_time = std::numeric_limits<uint64_t>::max();
+        uint8_t earliest_chip = 0;
+        for (int chip_nr = 0; chip_nr < 4; ++chip_nr) {
+            if (not extractors[chip_nr].front()) {
+                // Keep other producers from blocking on full queues
+                return -1;
             }
-            const auto hit = extractors[earliest_chip].front();
-            current_batch->push_back({hit.toa(), hit.tot(), hit.x(), hit.y()});
-            extractors[earliest_chip].pop();
+            auto hit = extractors[chip_nr].front();
+            if (hit.toa() < earliest_time) {
+                earliest_time = hit.toa();
+                earliest_chip = chip_nr;
+            }
         }
+        return earliest_chip;
+    }
+    bool fill_batch() {
+        DEBUG_ASSERT(not current_batch);
+        if (not current_batch)
+            current_batch = batch_pool.acquire_batch_blocking();
+        while (current_batch->size < BATCH_SIZE) {
+            for (auto& e : extractors) e.drain();
+            int chip_nr = next_time();
+            if (chip_nr == -1) return false;
+            const auto hit = extractors[chip_nr].front();
+            current_batch->push_back({hit.toa(), hit.tot(), hit.x(), hit.y()});
+            extractors[chip_nr].pop();
+        }
+        return true;
     };
 
    public:
@@ -58,8 +59,8 @@ class Merger {
           stop(std::move(t_stop)) {};
     void set_stop_token(const std::stop_token& t_stop) { stop = t_stop; }
     HitBatchPtr* front() {
-        if (not current_batch) fill_batch();
-        return &current_batch;
+        if (fill_batch()) return &current_batch;
+        return nullptr;
     };
     void pop() { current_batch = nullptr; };
     size_t size() {
