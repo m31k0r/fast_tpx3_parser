@@ -2,6 +2,7 @@
 #include <sys/types.h>
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <libassert/assert.hpp>
 #include <memory>
@@ -64,7 +65,9 @@ Batch_Pool<Batch>::acquire_batch_blocking() {
     Batch *batch = nullptr;
     while (not m_free_batches.try_pop(batch)) {
         //            std::this_thread::sleep_for(std::chrono::nanooseconds(10));
-        std::cerr << "No free batches this should not happen";
+        std::cerr << "No free batches this should not happen\n";
+        std::cerr << libassert::stacktrace();
+        exit(-1);
     }
     DEBUG_ASSERT(batch, "should not pop a null batch");
     batch->size = 0;

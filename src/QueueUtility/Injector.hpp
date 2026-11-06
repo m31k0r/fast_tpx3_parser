@@ -1,4 +1,5 @@
 #pragma once
+#include <iostream>
 #include <libassert/assert.hpp>
 #include <type_traits>
 

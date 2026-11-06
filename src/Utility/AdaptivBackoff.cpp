@@ -30,6 +30,6 @@ void adaptive_backoff::pause() noexcept {
     }
 
     if (failures_ < yield_limit + 160) ++failures_;
-    if (failures_ == yield_limit + 155)
-        std::cout << libassert::stacktrace() << std::endl;
+    // if (failures_ == yield_limit + 155)
+    //     std::cout << libassert::stacktrace() << std::endl;
 }
