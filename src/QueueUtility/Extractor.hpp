@@ -13,6 +13,9 @@ template <typename InQueue, typename BatchPtr>
     requires SCQueueable<InQueue, BatchPtr>
 
 class Extractor {
+    using Batch = typename BatchPtr::element_type;
+    using OwnedBatchPtr = std::unique_ptr<Batch>;
+
     using IteratorType = std::conditional_t<
         std::is_same_v<BatchPtr, HitBatchPtr>, HitIterator,
         std::conditional_t<std::is_same_v<BatchPtr, TriggerBatchPtr>,
@@ -28,6 +31,12 @@ class Extractor {
         if (not overflow.empty()) {
             auto tmp = std::move(overflow.front());
             overflow.pop_front();
+            read_idx = 0;
+            return tmp;
+        }
+        if (auto *queued = queue.front()) {
+            auto tmp = std::make_unique<Batch>(**queued);
+            queue.pop();
             read_idx = 0;
             return tmp;
         }
@@ -50,7 +59,7 @@ class Extractor {
                 return IteratorType(nullptr, 0);
             }
         }
-        return IteratorType(&current_batch, read_idx);
+        return IteratorType(current_batch.get(), read_idx);
     };
 
     void pop() {

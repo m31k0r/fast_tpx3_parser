@@ -5,37 +5,37 @@
 #include "Constants.hpp"
 
 class HitIterator {
-    HitBatchPtr *batch;
+    HitBatch *batch;
     size_t idx;
 
     [[nodiscard]] uint64_t get_toa() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
-        return (*batch)->toa[idx];
+        return batch->toa[idx];
     }
 
     [[nodiscard]] uint64_t get_tot() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
-        return (*batch)->tot[idx];
+        return batch->tot[idx];
     }
 
     [[nodiscard]] uint16_t get_x() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
-        return (*batch)->x[idx];
+        return batch->x[idx];
     }
 
     [[nodiscard]] uint16_t get_y() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
-        return (*batch)->y[idx];
+        return batch->y[idx];
     }
 
    public:
     explicit operator bool() const noexcept { return batch != nullptr; }
 
-    HitIterator(HitBatchPtr *batch, size_t idx) : batch(batch), idx(idx) {}
+    HitIterator(HitBatch *batch, size_t idx) : batch(batch), idx(idx) {}
 
     uint64_t toa() const { return get_toa(); }
     uint64_t tot() const { return get_tot(); }
@@ -43,25 +43,25 @@ class HitIterator {
     uint16_t y() const { return get_y(); }
 };
 class TriggerIterator {
-    TriggerBatchPtr *batch;
+    TriggerBatch *batch;
     size_t idx;
 
     [[nodiscard]] uint64_t get_toa() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
-        return (*batch)->toa[idx];
+        return batch->toa[idx];
     }
 
     [[nodiscard]] uint8_t get_type() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
-        return (*batch)->type[idx];
+        return batch->type[idx];
     }
 
    public:
     explicit operator bool() const noexcept { return batch != nullptr; }
 
-    TriggerIterator(TriggerBatchPtr *batch, size_t idx)
+    TriggerIterator(TriggerBatch *batch, size_t idx)
         : batch(batch), idx(idx) {}
 
     uint64_t toa() const { return get_toa(); }
@@ -71,9 +71,9 @@ class TriggerIterator {
 struct U64Iterator {
     uint64_t *ptr = nullptr;
 
-    U64Iterator(const U64BatchPtr *batch, size_t idx) {
+    U64Iterator(const U64Batch *batch, size_t idx) {
         if (batch) {
-            ptr = &(*batch)->data[idx];
+            ptr = &batch->data[idx];
         }
     }
     uint64_t operator*() const {
