@@ -139,16 +139,16 @@ class Parser {
     TriggerMerger trigger_out_queue{m_batch_handle.parsed_triggers};
 
     // Hits
-    // using Sort_t = Sort<U64SPSC, HitSPSC>;
-    // std::array<Sort_t, 4> sort_hits =
-    //     make_array_l<Sort_t>(std::make_index_sequence<4>{}, [this](int i) {
-    //         return Sort_t(m_batch_handle.hit_queue[i],
-    //                       m_batch_handle.sorted_hit_queue[i],
-    //                       m_batch_handle.Hitbatch_pool, camera_);
-    //     });
+    using Sort_t = Sort<U64SPSC, HitSPSC>;
+    std::array<Sort_t, 4> sort_hits =
+        make_array_l<Sort_t>(std::make_index_sequence<4>{}, [this](int i) {
+            return Sort_t(m_batch_handle.hit_queue[i],
+                          m_batch_handle.sorted_hit_queue[i],
+                          m_batch_handle.Hitbatch_pool, camera_);
+        });
 
-    // std::array<Sink<HitSPSC, HitBatchPtr>, 4> sinks;
-    std::array<Sink<U64SPSC, U64BatchPtr>, 4> sinks;
+    std::array<Sink<HitSPSC, HitBatchPtr>, 4> sinks;
+    // std::array<Sink<U64SPSC, U64BatchPtr>, 4> sinks;
 
     // Merger merger{m_batch_handle.Hitbatch_pool,
     //               make_array_l<Extractor<HitSPSC, HitBatchPtr>>(
@@ -175,8 +175,8 @@ class Parser {
     {
         for (int i = 0; i < 4; ++i) {
             // sort_hits[i].start_worker();
-            // sinks[i].start(m_batch_handle.sorted_hit_queue[i]);
-            sinks[i].start(m_batch_handle.hit_queue[i]);
+            sinks[i].start(m_batch_handle.sorted_hit_queue[i]);
+            // sinks[i].start(m_batch_handle.hit_queue[i]);
         }
         // sink.start(out_queue);
         // merger.set_stop_token(sink.get_stop_token());

@@ -11,6 +11,8 @@
 #include "QueueUtility/QueueConcepts.hpp"
 #include "Utility/AdaptivBackoff.hpp"
 
+auto Compare = [](PreParsed &a, PreParsed &b) { return a.toa < b.toa; };
+
 template <typename InQueue, typename OutQueue>
     requires SCQueueable<InQueue, U64BatchPtr> &&
              SCQueueable<OutQueue, HitBatchPtr>
@@ -26,6 +28,47 @@ class Sort {
     std::array<PreParsed, BATCH_SIZE> buffer2_;
     bool buffer_filled = false;
 
+    void flush_one_batch_only(U64BatchPtr batch) {
+        std::transform(
+            batch->begin(), batch->end(), buffer_.begin() + BATCH_SIZE,
+            [this](uint64_t t_data) { return parsehit.parse(t_data); });
+        std::sort(buffer_.begin() + BATCH_SIZE,
+                  buffer_.begin() + BATCH_SIZE + batch->size, Compare);
+        auto hit_batch =
+            parsehit.parse_no_toa(buffer_.begin() + BATCH_SIZE,
+                                  buffer_.begin() + BATCH_SIZE + batch->size);
+        std::transform(buffer_.begin() + BATCH_SIZE,
+                       buffer_.begin() + BATCH_SIZE + batch->size,
+                       hit_batch->toa.begin(), [](auto b) { return b.toa; });
+        m_hit_queue.pop();
+    }
+
+    void insert_and_sort(U64BatchPtr batch, std::stop_token stop) {
+        std::transform(
+            batch->begin(), batch->end(), buffer2_.begin(),
+            [this](uint64_t t_data) { return parsehit.parse(t_data); });
+        std::sort(buffer2_.begin(), buffer2_.end(), Compare);
+
+        std::merge(buffer2_.begin(), buffer2_.end(),
+                   buffer_.begin() + BATCH_SIZE, buffer_.end(), buffer_.begin(),
+                   Compare);
+
+        auto hit_batch = parsehit.parse_no_toa(buffer_.begin(),
+                                               buffer_.begin() + BATCH_SIZE);
+        std::transform(buffer_.begin(), buffer_.begin() + BATCH_SIZE,
+                       hit_batch->toa.begin(), [](auto b) { return b.toa; });
+
+        adaptive_backoff backoff;
+        while (not m_sorted_hit_queue.try_push(std::move(hit_batch))) {
+            backoff.pause();
+            if (stop.stop_requested()) {
+                return;
+            }
+        }
+    }
+
+    void flush() {}
+
    public:
     Sort(InQueue &input_queue, OutQueue &output_queue,
          Batch_Pool<HitBatch> &pool, Camera &camera)
@@ -37,52 +80,34 @@ class Sort {
     void start_worker() {
         m_thread = std::jthread([this](std::stop_token stop) {
             pthread_setname_np(pthread_self(), "Sorter");
-            auto Compare = [](PreParsed &a, PreParsed &b) {
-                return a.toa < b.toa;
-            };
             while (not stop.stop_requested()) {
                 if (not buffer_filled) {
                     if (m_hit_queue.front()) {
                         U64BatchPtr batch = std::move(*m_hit_queue.front());
-                        std::transform(batch->begin(), batch->end(),
-                                       buffer_.begin() + BATCH_SIZE,
-                                       [this](uint64_t t_data) {
-                                           return parsehit.parse(t_data);
-                                       });
-                        std::sort(buffer_.begin() + BATCH_SIZE, buffer_.end(),
-                                  Compare);
-                        m_hit_queue.pop();
-                        buffer_filled = true;
+                        if (batch->size == BATCH_SIZE) {
+                            std::transform(batch->begin(), batch->end(),
+                                           buffer_.begin() + BATCH_SIZE,
+                                           [this](uint64_t t_data) {
+                                               return parsehit.parse(t_data);
+                                           });
+                            std::sort(buffer_.begin() + BATCH_SIZE,
+                                      buffer_.end(), Compare);
+                            m_hit_queue.pop();
+                            buffer_filled = true;
+                        } else {
+                            flush_one_batch_only(batch);
+                        }
                     }
                 } else if (m_hit_queue.front()) {
                     U64BatchPtr batch = std::move(*m_hit_queue.front());
                     DEBUG_ASSERT(batch);
 
-                    std::transform(batch->begin(), batch->end(),
-                                   buffer2_.begin(), [this](uint64_t t_data) {
-                                       return parsehit.parse(t_data);
-                                   });
-                    std::sort(buffer2_.begin(), buffer2_.end(), Compare);
-
-                    std::merge(buffer2_.begin(), buffer2_.end(),
-                               buffer_.begin() + BATCH_SIZE, buffer_.end(),
-                               buffer_.begin(), Compare);
-
-                    auto hit_batch = parsehit.parse_no_toa(
-                        buffer_.begin(), buffer_.begin() + BATCH_SIZE);
-                    std::transform(
-                        buffer_.begin(), buffer_.begin() + BATCH_SIZE,
-                        hit_batch->toa.begin(), [](auto b) { return b.toa; });
-
-                    adaptive_backoff backoff;
-                    while (
-                        not m_sorted_hit_queue.try_push(std::move(hit_batch))) {
-                        backoff.pause();
-                        if (stop.stop_requested()) {
-                            return;
-                        }
+                    if (batch->size == BATCH_SIZE) {
+                        insert_and_sort(std::move(batch), stop);
+                        m_hit_queue.pop();
+                    } else {
+                        flush(std::move(batch));
                     }
-                    m_hit_queue.pop();
                 }
             }
         });
