@@ -36,12 +36,13 @@ class Sort {
           pool(pool) {}
 
     void sort_emit(U64BatchPtr batch, std::stop_token stop) {
+        size_t n = batch->size;
         std::transform(
             batch->begin(), batch->end(), buffer2_.begin(),
             [this](uint64_t t_data) { return parsehit.parse(t_data); });
-        std::sort(buffer2_.begin(), buffer2_.end(), Compare);
+        std::sort(buffer2_.begin(), buffer2_.begin() + n, Compare);
 
-        std::merge(buffer2_.begin(), buffer2_.end(),
+        std::merge(buffer2_.begin(), buffer2_.begin() + n,
                    buffer_.begin() + BATCH_SIZE, buffer_.end(), buffer_.begin(),
                    Compare);
 
