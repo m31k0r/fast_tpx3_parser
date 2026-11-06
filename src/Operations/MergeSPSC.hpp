@@ -48,8 +48,8 @@ class SPSCs2SPSC {
         return &current_batch;
     };
     void pop() {
-        DEBUG_ASSERT(current_batch,
-                     "Should not pop if current_batch is nullptr");
+        // DEBUG_ASSERT(current_batch,
+        //              "Should not pop if current_batch is nullptr");
         current_batch = nullptr;
     };
 

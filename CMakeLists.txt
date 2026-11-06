@@ -80,6 +80,7 @@ add_executable(unit_tests
         src/QueueUtility/Injector_test.cpp
         src/QueueUtility/Sequencer_test.cpp
         src/Parsing/Rotation_test.cpp
+        src/Operations/Sorter_test.cpp
 )
 
 target_link_libraries(unit_tests

@@ -1,14 +1,15 @@
 #pragma once
 #include <sys/types.h>
 #include <algorithm>
+#include <array>
 #include <assert.hpp>
 #include <cstdint>
 #include <stop_token>
 #include <utility>
-#include "../Batch/Batch.hpp"
-#include "../Constants.hpp"
-#include "../QueueUtility/Extractor.hpp"
-#include "../Utility/SPSCQueue.h"
+#include "Batch/Batch.hpp"
+#include "Constants.hpp"
+#include "QueueUtility/Extractor.hpp"
+#include "Utility/SPSCQueue.h"
 
 class Merger {
     std::array<Extractor<rigtorp::SPSCQueue<HitBatchPtr>, HitBatchPtr>, 4>
@@ -19,10 +20,11 @@ class Merger {
 
     int next_time() {
         uint64_t earliest_time = std::numeric_limits<uint64_t>::max();
-        uint8_t earliest_chip = 0;
+        int8_t earliest_chip = -1;
         for (int chip_nr = 0; chip_nr < 4; ++chip_nr) {
             if (not extractors[chip_nr].front()) {
                 // Keep other producers from blocking on full queues
+                if (extractors[chip_nr].flush) continue;
                 return -1;
             }
             auto hit = extractors[chip_nr].front();
@@ -34,12 +36,11 @@ class Merger {
         return earliest_chip;
     }
     bool fill_batch() {
-        DEBUG_ASSERT(not current_batch);
         if (not current_batch)
             current_batch = batch_pool.acquire_batch_blocking();
         while (current_batch->size < BATCH_SIZE) {
             for (auto& e : extractors) e.drain();
-            int chip_nr = next_time();
+            int8_t chip_nr = next_time();
             if (chip_nr == -1) return false;
             const auto hit = extractors[chip_nr].front();
             current_batch->push_back({hit.toa(), hit.tot(), hit.x(), hit.y()});
@@ -56,7 +57,7 @@ class Merger {
            std::stop_token t_stop = {})
         : extractors(std::move(arr)),
           batch_pool(t_batch_pool),
-          stop(std::move(t_stop)) {};
+          stop(std::move(t_stop)){};
     void set_stop_token(const std::stop_token& t_stop) { stop = t_stop; }
     HitBatchPtr* front() {
         if (fill_batch()) return &current_batch;

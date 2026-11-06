@@ -45,6 +45,7 @@ class Extractor {
     }
 
    public:
+    bool flush = false;
     Extractor(InQueue &queue) : queue(queue) {}
 
     IteratorType front() {
@@ -55,6 +56,7 @@ class Extractor {
             return IteratorType(nullptr, 0);
         }
         if (read_idx >= current_batch->size) {
+            if (current_batch->size < BATCH_SIZE) flush = true;
             current_batch = next_batch();
             if (not current_batch) {
                 return IteratorType(nullptr, 0);

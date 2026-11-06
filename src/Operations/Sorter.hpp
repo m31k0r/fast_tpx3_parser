@@ -12,7 +12,6 @@
 #include "Utility/AdaptivBackoff.hpp"
 
 auto Compare = [](PreParsed &a, PreParsed &b) { return a.toa < b.toa; };
-
 template <typename InQueue, typename OutQueue>
     requires SCQueueable<InQueue, U64BatchPtr> &&
              SCQueueable<OutQueue, HitBatchPtr>
@@ -28,22 +27,15 @@ class Sort {
     std::array<PreParsed, BATCH_SIZE> buffer2_;
     bool buffer_filled = false;
 
-    void flush_one_batch_only(U64BatchPtr batch) {
-        std::transform(
-            batch->begin(), batch->end(), buffer_.begin() + BATCH_SIZE,
-            [this](uint64_t t_data) { return parsehit.parse(t_data); });
-        std::sort(buffer_.begin() + BATCH_SIZE,
-                  buffer_.begin() + BATCH_SIZE + batch->size, Compare);
-        auto hit_batch =
-            parsehit.parse_no_toa(buffer_.begin() + BATCH_SIZE,
-                                  buffer_.begin() + BATCH_SIZE + batch->size);
-        std::transform(buffer_.begin() + BATCH_SIZE,
-                       buffer_.begin() + BATCH_SIZE + batch->size,
-                       hit_batch->toa.begin(), [](auto b) { return b.toa; });
-        m_hit_queue.pop();
-    }
+   public:
+    Sort(InQueue &input_queue, OutQueue &output_queue,
+         Batch_Pool<HitBatch> &pool, Camera &camera)
+        : m_hit_queue(input_queue),
+          m_sorted_hit_queue(output_queue),
+          parsehit(pool, camera),
+          pool(pool) {}
 
-    void insert_and_sort(U64BatchPtr batch, std::stop_token stop) {
+    void sort_emit(U64BatchPtr batch, std::stop_token stop) {
         std::transform(
             batch->begin(), batch->end(), buffer2_.begin(),
             [this](uint64_t t_data) { return parsehit.parse(t_data); });
@@ -66,17 +58,6 @@ class Sort {
             }
         }
     }
-
-    void flush() {}
-
-   public:
-    Sort(InQueue &input_queue, OutQueue &output_queue,
-         Batch_Pool<HitBatch> &pool, Camera &camera)
-        : m_hit_queue(input_queue),
-          m_sorted_hit_queue(output_queue),
-          parsehit(pool, camera),
-          pool(pool) {}
-
     void start_worker() {
         m_thread = std::jthread([this](std::stop_token stop) {
             pthread_setname_np(pthread_self(), "Sorter");
@@ -84,30 +65,42 @@ class Sort {
                 if (not buffer_filled) {
                     if (m_hit_queue.front()) {
                         U64BatchPtr batch = std::move(*m_hit_queue.front());
-                        if (batch->size == BATCH_SIZE) {
-                            std::transform(batch->begin(), batch->end(),
-                                           buffer_.begin() + BATCH_SIZE,
-                                           [this](uint64_t t_data) {
-                                               return parsehit.parse(t_data);
-                                           });
-                            std::sort(buffer_.begin() + BATCH_SIZE,
-                                      buffer_.end(), Compare);
-                            m_hit_queue.pop();
-                            buffer_filled = true;
-                        } else {
-                            flush_one_batch_only(batch);
-                        }
+                        std::transform(batch->begin(), batch->end(),
+                                       buffer_.begin() + BATCH_SIZE,
+                                       [this](uint64_t t_data) {
+                                           return parsehit.parse(t_data);
+                                       });
+                        std::sort(buffer_.begin() + BATCH_SIZE, buffer_.end(),
+                                  Compare);
+                        m_hit_queue.pop();
+                        buffer_filled = true;
                     }
                 } else if (m_hit_queue.front()) {
                     U64BatchPtr batch = std::move(*m_hit_queue.front());
                     DEBUG_ASSERT(batch);
-
-                    if (batch->size == BATCH_SIZE) {
-                        insert_and_sort(std::move(batch), stop);
-                        m_hit_queue.pop();
-                    } else {
-                        flush(std::move(batch));
+                    if (batch->size == BATCH_SIZE)
+                        sort_emit(std::move(batch), stop);
+                    else {
+                        const auto n = batch->size;
+                        sort_emit(std::move(batch), stop);
+                        auto hit_batch = parsehit.parse_no_toa(
+                            buffer_.begin() + BATCH_SIZE,
+                            buffer_.begin() + BATCH_SIZE + n);
+                        std::transform(buffer_.begin() + BATCH_SIZE,
+                                       buffer_.begin() + BATCH_SIZE + n,
+                                       hit_batch->toa.begin(),
+                                       [](auto b) { return b.toa; });
+                        ASSERT(hit_batch->size == n);
+                        adaptive_backoff backoff;
+                        while (not m_sorted_hit_queue.try_push(
+                            std::move(hit_batch))) {
+                            backoff.pause();
+                            if (stop.stop_requested()) {
+                                return;
+                            }
+                        }
                     }
+                    m_hit_queue.pop();
                 }
             }
         });
