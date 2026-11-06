@@ -185,8 +185,8 @@ class Parser {
         merger.set_stop_token(hit_sink.get_stop_token());
         trigger_sink.start(trigger_out_queue);
     };
-    void parse() {
-        auto ec [[maybe_unused]] = header.parse(map);
+    void parse() { auto ec [[maybe_unused]] = header.parse(map); }
+    void flush() {
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,
                               [](auto& inj) { inj.flush(); });
         m_batch_handle.pusher.trigger_inj.flush();
