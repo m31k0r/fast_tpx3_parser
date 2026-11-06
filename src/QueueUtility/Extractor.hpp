@@ -1,6 +1,8 @@
 #pragma once
 #include <assert.hpp>
 #include <deque>
+#include <memory>
+#include <type_traits>
 
 #include "../Batch/Batch.hpp"
 #include "QueueConcepts.hpp"
@@ -11,6 +13,9 @@ template <typename InQueue, typename BatchPtr>
     requires SCQueueable<InQueue, BatchPtr>
 
 class Extractor {
+    using Batch = typename BatchPtr::element_type;
+    using OwnedBatchPtr = std::unique_ptr<Batch>;
+
     using IteratorType = std::conditional_t<
         std::is_same_v<BatchPtr, HitBatchPtr>, HitIterator,
         std::conditional_t<std::is_same_v<BatchPtr, TriggerBatchPtr>,
@@ -18,14 +23,23 @@ class Extractor {
 
     InQueue &queue;
     size_t read_idx = 0;
-    BatchPtr current_batch;
+    using Batch = typename BatchPtr::element_type;
+    using OwnedBatchPtr = std::unique_ptr<Batch>;
 
-    std::deque<BatchPtr> overflow;
+    OwnedBatchPtr current_batch;
 
-    BatchPtr next_batch() {
+    std::deque<OwnedBatchPtr> overflow;
+
+    OwnedBatchPtr next_batch() {
         if (not overflow.empty()) {
             auto tmp = std::move(overflow.front());
             overflow.pop_front();
+            read_idx = 0;
+            return tmp;
+        }
+        if (auto *queued = queue.front()) {
+            auto tmp = std::make_unique<Batch>(**queued);
+            queue.pop();
             read_idx = 0;
             return tmp;
         }
@@ -48,7 +62,7 @@ class Extractor {
                 return IteratorType(nullptr, 0);
             }
         }
-        return IteratorType(&current_batch, read_idx);
+        return IteratorType(current_batch.get(), read_idx);
     };
 
     void pop() {
@@ -56,11 +70,11 @@ class Extractor {
         DEBUG_ASSERT(read_idx < current_batch->size);
         read_idx++;
     };
-    // Moves all queued batches into an unbounded local buffer so the
-    // producer never blocks on a full queue.
+    // Copy queued batches into an unbounded local buffer, returning the
+    // originals to the pool so the producer can continue.
     void drain() {
-        if (queue.front()) {
-            overflow.push_back(std::move(*queue.front()));
+        while (auto *queued = queue.front()) {
+            overflow.push_back(std::make_unique<Batch>(**queued));
             queue.pop();
         }
     }
