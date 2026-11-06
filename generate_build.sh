@@ -3,7 +3,8 @@ mkdir build
 conan install . \
   --output-folder=build/relwithdebinfo \
   --build=missing \
-  -s build_type=RelWithDebInfo
+  -s build_type=RelWithDebInfo \
+  -c tools.cmake.cmaketoolchain:generator=Ninja
 
 cmake -S . -B build/relwithdebinfo \
   -DCMAKE_TOOLCHAIN_FILE=build/relwithdebinfo/conan_toolchain.cmake \
@@ -18,7 +19,8 @@ ln -s tpx3.tpx3 build/relwithdebinfo/tpx3.tpx3
 conan install . \
   --output-folder=build/debug \
   --build=missing \
-  -s build_type=Debug
+  -s build_type=Debug \
+  -c tools.cmake.cmaketoolchain:generator=Ninja
 
 cmake -S . -B build/debug \
   -DCMAKE_TOOLCHAIN_FILE=build/debug/conan_toolchain.cmake \

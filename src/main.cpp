@@ -13,7 +13,7 @@
 #include <thread>
 #include <vector>
 
-constexpr auto num_runs = 5;
+constexpr auto num_runs = 1;
 
 void printHistogram(const std::vector<double>& runtimes, int numBuckets = 10,
                     const std::string& unit = "ms") {

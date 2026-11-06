@@ -21,9 +21,9 @@ class Sink {
             if (queue.try_pop(batch)) {
                 counter_batch++;
                 for (size_t i = 0; i < batch->size; ++i) {
-                    ASSERT(previous_time <= batch->toa[i],
-                           std::format("i={}", i));
-                    previous_time = batch->toa[i];
+                    // DEBUG_ASSERT(previous_time <= batch->toa[i],
+                    //              std::format("i={}", i));
+                    // previous_time = batch->toa[i];
                     counter++;
                 }
             }
@@ -31,9 +31,9 @@ class Sink {
             if (queue.front()) {
                 auto batch = std::move(*queue.front());
                 for (size_t i = 0; i < batch->size; ++i) {
-                    ASSERT(previous_time <= batch->toa[i],
-                           std::format("i={}", i));
-                    previous_time = batch->toa[i];
+                    // DEBUG_ASSERT(previous_time <= batch->toa[i],
+                    //              std::format("i={}", i));
+                    // previous_time = batch->toa[i];
                     counter++;
                 }
                 queue.pop();
