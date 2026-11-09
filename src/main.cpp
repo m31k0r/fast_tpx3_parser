@@ -101,10 +101,10 @@ int main(int argc, char* argv[]) {
         const auto time_s = std::chrono::duration<double>(stop - start).count();
         time_per_run.push_back(file_size_gb / time_s);
         std::cout << "." << std::flush;
+        parser.flush();
     }
 
     printHistogram(time_per_run, 10, "Gb/s");
-    parser.flush();
     std::this_thread::sleep_for(std::chrono::seconds(5));
     return 0;
 }
