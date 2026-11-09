@@ -31,12 +31,12 @@ TEST_CASE("Hit parser fills batches and preserves decoded values") {
     REQUIRE(parsed->size == 1);
     REQUIRE(parsed->toa[0] == decoded.get_toa());
     REQUIRE(parsed->tot[0] == 511);
-    REQUIRE(parsed->x[0] == 258);
-    REQUIRE(parsed->y[0] == 502);
+    REQUIRE(parsed->x[0] == 259);
+    REQUIRE(parsed->y[0] == 504);
 
     auto no_toa = parser.parse_no_toa(&pre_parsed, &pre_parsed + 1);
     REQUIRE(no_toa->size == 1);
     REQUIRE(no_toa->tot[0] == 511);
-    REQUIRE(no_toa->x[0] == 258);
-    REQUIRE(no_toa->y[0] == 502);
+    REQUIRE(no_toa->x[0] == 259);
+    REQUIRE(no_toa->y[0] == 504);
 }

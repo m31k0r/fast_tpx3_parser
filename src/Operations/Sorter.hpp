@@ -152,7 +152,8 @@ class Sort {
                         }
                         return;
                     }
-                    U64BatchPtr batch = std::move(std::get<U64BatchPtr>(message));
+                    U64BatchPtr batch =
+                        std::move(std::get<U64BatchPtr>(message));
                     DEBUG_ASSERT(batch);
                     const auto batch_size = batch->size;
                     if (batch_size == 0) continue;
