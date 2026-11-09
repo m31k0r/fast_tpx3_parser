@@ -20,22 +20,18 @@ class Worker {
             uint64_t previous_seq_nr [[maybe_unused]] = 0;
             while (not stop_token.stop_requested()) {
                 U64BatchPtr ba;
-                if constexpr (MCQueueable<InQueue, U64BatchPtr>) {
-                    in.try_pop(ba);
-                } else {
-                    if (in.front()) {
-                        auto message = std::move(*in.front());
-                        in.pop();
-                        if (std::holds_alternative<EndOfFile>(message)) {
-                            adaptive_backoff backoff;
-                            while (not out.try_push(EndOfFile{})) {
-                                backoff.pause();
-                                if (stop_token.stop_requested()) return;
-                            }
-                            return;
+                if (in.front()) {
+                    auto message = std::move(*in.front());
+                    in.pop();
+                    if (std::holds_alternative<EndOfFile>(message)) {
+                        adaptive_backoff backoff;
+                        while (not out.try_push(EndOfFile{})) {
+                            backoff.pause();
+                            if (stop_token.stop_requested()) return;
                         }
-                        ba = std::move(std::get<U64BatchPtr>(message));
+                        return;
                     }
+                    ba = std::move(std::get<U64BatchPtr>(message));
                 }
                 if (ba) {
                     const auto old_seq [[maybe_unused]] = ba->sequence_number;

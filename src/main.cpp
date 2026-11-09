@@ -88,22 +88,21 @@ void printHistogram(const std::vector<double>& runtimes, int numBuckets = 10,
 int main(int argc, char* argv[]) {
     std::string filename = "tpx3.tpx3";
     if (argc == 2) filename = argv[1];
-    MemoryMap mmap(filename);
-    const auto file_size_gb =
-        std::distance(mmap.begin(), mmap.end()) * sizeof(uint64_t) * 1e-9;
-    Parser<4> parser(std::move(mmap));
     std::cout << "Starting parsing" << std::endl;
     std::vector<double> time_per_run;
     for (int i = 0; i < num_runs; ++i) {
+        MemoryMap mmap(filename);
+        const auto file_size_gb =
+            std::distance(mmap.begin(), mmap.end()) * sizeof(uint64_t) * 1e-9;
+        Parser<4> parser(std::move(mmap));
         const auto start = std::chrono::steady_clock::now();
         parser.parse();
+        parser.finish();
         const auto stop = std::chrono::steady_clock::now();
         const auto time_s = std::chrono::duration<double>(stop - start).count();
         time_per_run.push_back(file_size_gb / time_s);
         std::cout << "." << std::flush;
-        parser.flush();
     }
-    parser.finish();
 
     printHistogram(time_per_run, 10, "Gb/s");
     return 0;

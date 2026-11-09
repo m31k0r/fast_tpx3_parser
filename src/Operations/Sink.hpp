@@ -19,7 +19,7 @@ class Sink {
 
    public:
     std::stop_token get_stop_token() { return m_thread.get_stop_token(); }
-    bool operator()(Queue &queue) {
+    bool operator()(Queue& queue) {
         if constexpr (SCQueueable<Queue, QueueMessage<BatchPtr>>) {
             if (auto* message = queue.front()) {
                 if (std::holds_alternative<EndOfFile>(*message)) {
@@ -29,9 +29,6 @@ class Sink {
                 consume(std::get<BatchPtr>(*message));
                 queue.pop();
             }
-        } else if constexpr (MCQueueable<Queue, BatchPtr>) {
-            BatchPtr batch;
-            if (queue.try_pop(batch)) consume(batch);
         } else {
             if (auto* batch = queue.front()) {
                 consume(*batch);
@@ -41,7 +38,7 @@ class Sink {
         return false;
     }
 
-    void start(Queue &queue) {
+    void start(Queue& queue) {
         m_thread = std::jthread([this, &queue](std::stop_token stop) {
             pthread_setname_np(pthread_self(), "Sink");
             while (not stop.stop_requested()) {
@@ -53,10 +50,6 @@ class Sink {
         if (m_thread.joinable()) m_thread.join();
     }
     ~Sink() {
-        if (m_thread.joinable()) {
-            m_thread.request_stop();
-            m_thread.join();
-        }
         std::cout << "Received " << counter_batch << " batches with " << counter
                   << " events\n";
     }

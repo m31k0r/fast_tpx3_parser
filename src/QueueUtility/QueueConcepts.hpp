@@ -9,11 +9,6 @@ concept SCQueueable = requires(Q& queue, T& value) {
 };
 
 template <typename Q, typename T>
-concept MCQueueable = requires(Q& queue, T& value) {
-    { queue.try_pop(value) } -> std::convertible_to<bool>;
-};
-
-template <typename Q, typename T>
 concept InQueueable = requires(Q& queue, T& value) {
     { queue.try_push(std::move(value)) } -> std::convertible_to<bool>;
 };
