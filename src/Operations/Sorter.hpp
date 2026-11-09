@@ -125,6 +125,7 @@ class Sort {
                     DEBUG_ASSERT(batch);
                     const auto batch_size = batch->size;
                     m_hit_queue.pop();
+                    if (batch_size == 0) return;
 
                     if (not buffer_filled) {
                         fill_buffer(std::move(batch), stop);

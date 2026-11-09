@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <iostream>
 #include <stop_token>
 #include <thread>
 #include "Batch/Batch.hpp"
@@ -55,6 +56,10 @@ class Delay {
                 }
                 std::cout << std::flush;
             }
+
+            std::cout << "Hits left: " << hit_extractor.size() << std::endl;
+            std::cout << "Trigger left: " << trigger_extractor.size()
+                      << std::endl;
         });
     }
 };

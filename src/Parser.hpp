@@ -158,32 +158,31 @@ class Parser {
                       })};
 
     // Temporary Sinks;
-    Sink<Merger, HitBatchPtr> hit_sink;
-    Sink<TriggerMerger, TriggerBatchPtr> trigger_sink;
+    // Sink<Merger, HitBatchPtr> hit_sink;
+    // Sink<TriggerMerger, TriggerBatchPtr> trigger_sink;
     //
     //
-    // HitSPSC out_queue{QUEUE_SIZE};
-    // Delay<Merger, TriggerMerger, HitSPSC> delay;
-    // Sink<HitSPSC, HitBatchPtr> sink;
+    HitSPSC out_queue{QUEUE_SIZE};
+    Delay<Merger, TriggerMerger, HitSPSC> delay;
+    Sink<HitSPSC, HitBatchPtr> sink;
 
    public:
     Parser(MemoryMap t_map)
         : header(m_batch_handle.pusher),
-          map(std::move(t_map))
-    // delay(merger, trigger_out_queue, out_queue,
-    //       m_batch_handle.Hitbatch_pool) {
-    {
+          map(std::move(t_map)),
+          delay(merger, trigger_out_queue, out_queue,
+                m_batch_handle.Hitbatch_pool) {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
             // sinks[i].start(m_batch_handle.sorted_hit_queue[i]);
             // sinks[i].start(m_batch_handle.hit_queue[i]);
         }
-        // sink.start(out_queue);
-        // merger.set_stop_token(sink.get_stop_token());
+        sink.start(out_queue);
+        merger.set_stop_token(sink.get_stop_token());
         // o
-        hit_sink.start(merger);
-        merger.set_stop_token(hit_sink.get_stop_token());
-        trigger_sink.start(trigger_out_queue);
+        // hit_sink.start(merger);
+        // merger.set_stop_token(hit_sink.get_stop_token());
+        // trigger_sink.start(trigger_out_queue);
     };
     void parse() { auto ec [[maybe_unused]] = header.parse(map); }
     void flush() {
