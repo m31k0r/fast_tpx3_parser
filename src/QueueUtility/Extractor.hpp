@@ -6,11 +6,13 @@
 
 #include "../Batch/Batch.hpp"
 #include "QueueConcepts.hpp"
+#include "QueueMessage.hpp"
 
 #include "Iterator.hpp"
 
 template <typename InQueue, typename BatchPtr>
-    requires SCQueueable<InQueue, BatchPtr>
+    requires (SCQueueable<InQueue, BatchPtr> ||
+              SCQueueable<InQueue, QueueMessage<BatchPtr>>)
 
 class Extractor {
     using Batch = typename BatchPtr::element_type;
@@ -26,37 +28,47 @@ class Extractor {
 
     OwnedBatchPtr current_batch;
 
-    std::deque<OwnedBatchPtr> overflow;
+    std::deque<std::variant<OwnedBatchPtr, EndOfFile>> overflow;
+    bool ended = false;
+    bool eof_queued = false;
+
+    void copy_front() {
+        auto *queued = queue.front();
+        if constexpr (SCQueueable<InQueue, QueueMessage<BatchPtr>>) {
+            if (std::holds_alternative<EndOfFile>(*queued)) {
+                overflow.emplace_back(EndOfFile{});
+                eof_queued = true;
+            } else {
+                overflow.emplace_back(
+                    std::make_unique<Batch>(*std::get<BatchPtr>(*queued)));
+            }
+        } else {
+            overflow.emplace_back(std::make_unique<Batch>(**queued));
+        }
+        queue.pop();
+    }
 
     OwnedBatchPtr next_batch() {
+        if (overflow.empty() && not ended && queue.front()) copy_front();
         if (not overflow.empty()) {
-            auto tmp = std::move(overflow.front());
+            auto message = std::move(overflow.front());
             overflow.pop_front();
+            if (std::holds_alternative<EndOfFile>(message)) {
+                ended = true;
+                return nullptr;
+            }
             read_idx = 0;
-            return tmp;
-        }
-        if (auto *queued = queue.front()) {
-            auto tmp = std::make_unique<Batch>(**queued);
-            queue.pop();
-            read_idx = 0;
-            return tmp;
+            return std::move(std::get<OwnedBatchPtr>(message));
         }
         return nullptr;
     }
 
    public:
-    bool flush = false;
     Extractor(InQueue &queue) : queue(queue) {}
+    bool eof() const { return ended; }
 
     IteratorType front() {
-        if (not current_batch) {
-            current_batch = next_batch();
-        }
-        if (not current_batch) {
-            return IteratorType(nullptr, 0);
-        }
-        if (read_idx >= current_batch->size) {
-            if (current_batch->size < BATCH_SIZE) flush = true;
+        while (not current_batch || read_idx >= current_batch->size) {
             current_batch = next_batch();
             if (not current_batch) {
                 return IteratorType(nullptr, 0);
@@ -73,9 +85,9 @@ class Extractor {
     // Copy queued batches into an unbounded local buffer, returning the
     // originals to the pool so the producer can continue.
     void drain() {
-        while (auto *queued = queue.front()) {
-            overflow.push_back(std::make_unique<Batch>(**queued));
-            queue.pop();
+        while (not eof_queued && not ended && queue.front()) {
+            copy_front();
+            if (std::holds_alternative<EndOfFile>(overflow.back())) break;
         }
     }
     size_t size() { return queue.size() + overflow.size(); }

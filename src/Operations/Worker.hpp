@@ -2,15 +2,15 @@
 #include <thread>
 #include "Batch/Batch.hpp"
 #include "QueueUtility/QueueConcepts.hpp"
+#include "QueueUtility/QueueMessage.hpp"
 #include "Utility/AdaptivBackoff.hpp"
 
 template <class Work, class InQueue, class OutQueue>
 class Worker {
-    std::jthread worker;
-
     InQueue& in;
     OutQueue& out;
     Work work;
+    std::jthread worker;
 
    public:
     Worker(Work t_work, InQueue& t_in, OutQueue& t_out)
@@ -24,8 +24,17 @@ class Worker {
                     in.try_pop(ba);
                 } else {
                     if (in.front()) {
-                        ba = std::move(*in.front());
+                        auto message = std::move(*in.front());
                         in.pop();
+                        if (std::holds_alternative<EndOfFile>(message)) {
+                            adaptive_backoff backoff;
+                            while (not out.try_push(EndOfFile{})) {
+                                backoff.pause();
+                                if (stop_token.stop_requested()) return;
+                            }
+                            return;
+                        }
+                        ba = std::move(std::get<U64BatchPtr>(message));
                     }
                 }
                 if (ba) {

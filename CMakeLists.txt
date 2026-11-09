@@ -81,6 +81,8 @@ add_executable(unit_tests
         src/QueueUtility/Sequencer_test.cpp
         src/Parsing/Rotation_test.cpp
         src/Operations/Sorter_test.cpp
+        src/Operations/Worker_test.cpp
+        src/Operations/Pipeline_test.cpp
 )
 
 target_link_libraries(unit_tests

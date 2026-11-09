@@ -62,6 +62,8 @@ struct alignas(std::hardware_destructive_interference_size) HitBatch {
         tot[size] = hit.tot;
         x[size] = hit.x;
         y[size] = hit.y;
+        delay[size] = hit.delay;
+        trigger_diff[size] = hit.trigger_diff;
         size++;
     }
 };

@@ -103,8 +103,8 @@ int main(int argc, char* argv[]) {
         std::cout << "." << std::flush;
         parser.flush();
     }
+    parser.finish();
 
     printHistogram(time_per_run, 10, "Gb/s");
-    std::this_thread::sleep_for(std::chrono::seconds(20));
     return 0;
 }

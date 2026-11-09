@@ -24,13 +24,13 @@
 #include "Utility/helper.hpp"
 
 using U64MPMC = rigtorp::MPMCQueue<U64BatchPtr>;
-using U64SPSC = rigtorp::SPSCQueue<U64BatchPtr>;
+using U64SPSC = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
 
 using TriggerMPMC = rigtorp::MPMCQueue<TriggerBatchPtr>;
-using TriggerSPSC = rigtorp::SPSCQueue<TriggerBatchPtr>;
+using TriggerSPSC = rigtorp::SPSCQueue<QueueMessage<TriggerBatchPtr>>;
 
 using HitMPMC = rigtorp::MPMCQueue<HitBatchPtr>;
-using HitSPSC = rigtorp::SPSCQueue<HitBatchPtr>;
+using HitSPSC = rigtorp::SPSCQueue<QueueMessage<HitBatchPtr>>;
 
 using U64InjSP = Injector<U64SPSC, U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>;
 template <size_t N>
@@ -144,7 +144,8 @@ class Parser {
         make_array_l<Sort_t>(std::make_index_sequence<4>{}, [this](int i) {
             return Sort_t(m_batch_handle.hit_queue[i],
                           m_batch_handle.sorted_hit_queue[i],
-                          m_batch_handle.Hitbatch_pool, camera_);
+                          m_batch_handle.Hitbatch_pool, camera_,
+                          static_cast<uint8_t>(i));
         });
 
     // std::array<Sink<HitSPSC, HitBatchPtr>, 4> sinks;
@@ -178,7 +179,6 @@ class Parser {
             // sinks[i].start(m_batch_handle.hit_queue[i]);
         }
         sink.start(out_queue);
-        merger.set_stop_token(sink.get_stop_token());
         // o
         // hit_sink.start(merger);
         // merger.set_stop_token(hit_sink.get_stop_token());
@@ -189,5 +189,11 @@ class Parser {
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,
                               [](auto& inj) { inj.flush(); });
         m_batch_handle.pusher.trigger_inj.flush();
+    }
+    void finish() {
+        std::ranges::for_each(m_batch_handle.pusher.hit_inj,
+                              [](auto& inj) { inj.finish(); });
+        m_batch_handle.pusher.trigger_inj.finish();
+        sink.wait();
     }
 };

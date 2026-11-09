@@ -24,21 +24,30 @@ class Delay {
     Delay(HitQueue& hit, TriggerQueue& trigger, OutQueue& out,
           Batch_Pool<HitBatch>& pool)
         : hit_extractor(hit), trigger_extractor(trigger), inj(out, pool) {
-        m_thread = std::jthread([this, &out](std::stop_token stop) {
+        m_thread = std::jthread([this](std::stop_token stop) {
             pthread_setname_np(pthread_self(), "Delay");
             while (not stop.stop_requested()) {
                 hit_extractor.drain();
                 trigger_extractor.drain();
                 const auto first_trigger = trigger_extractor.front();
                 const auto first_hit = hit_extractor.front();
-                if (not first_hit) continue;
-                if (not first_trigger) continue;
-                if (first_trigger.type() != 0xf) {
+                if (not first_hit) {
+                    if (hit_extractor.eof()) {
+                        if (first_trigger) trigger_extractor.pop();
+                        else if (trigger_extractor.eof()) {
+                            inj.finish(stop);
+                            return;
+                        }
+                    }
+                    continue;
+                }
+                if (not first_trigger && not trigger_extractor.eof()) continue;
+                if (first_trigger && first_trigger.type() != 0xf) {
                     trigger_extractor.pop();
                     std::cout << "TD";
                     continue;
                 }
-                if (first_hit.toa() > first_trigger.toa()) {
+                if (first_trigger && first_hit.toa() > first_trigger.toa()) {
                     last_delay_time = first_trigger.toa();
                     trigger_extractor.pop();
                     continue;
@@ -50,7 +59,7 @@ class Delay {
                          static_cast<uint16_t>(first_hit.toa() -
                                                last_delay_time)})) {
                         backoff.pause();
-                        std::cout << out.size();
+                        if (stop.stop_requested()) return;
                     }
                     hit_extractor.pop();
                 }
