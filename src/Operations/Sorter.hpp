@@ -9,6 +9,7 @@
 #include "Constants.hpp"
 #include "Parsing/ParseHits.hpp"
 #include "QueueUtility/QueueConcepts.hpp"
+#include "QueueUtility/QueueMessage.hpp"
 #include "Utility/AdaptivBackoff.hpp"
 
 template <typename value_type, std::size_t BATCH_SIZE>
@@ -32,10 +33,10 @@ class Buffer : public std::array<value_type, BATCH_SIZE * 2> {
     }
 };
 
-auto Compare = [](PreParsed &a, PreParsed &b) { return a.toa < b.toa; };
+inline auto Compare = [](PreParsed &a, PreParsed &b) { return a.toa < b.toa; };
 template <typename InQueue, typename OutQueue>
-    requires SCQueueable<InQueue, U64BatchPtr> &&
-             SCQueueable<OutQueue, HitBatchPtr>
+    requires SCQueueable<InQueue, QueueMessage<U64BatchPtr>> &&
+             SCQueueable<OutQueue, QueueMessage<HitBatchPtr>>
 class Sort {
     int in_out = 0;
     InQueue &m_hit_queue;
@@ -43,19 +44,24 @@ class Sort {
     ParseHit parsehit;
     Batch_Pool<HitBatch> &pool;
 
-    std::jthread m_thread;
-
     Buffer<PreParsed, BATCH_SIZE> buffer_;
     std::array<PreParsed, BATCH_SIZE> buffer2_;
     bool buffer_filled = false;
+    std::jthread m_thread;
 
    public:
-    ~Sort() { std::cout << in_out << " == 0 " << std::endl; }
+    ~Sort() {
+        if (m_thread.joinable()) {
+            m_thread.request_stop();
+            m_thread.join();
+        }
+        std::cout << in_out << " == 0 " << std::endl;
+    }
     Sort(InQueue &input_queue, OutQueue &output_queue,
-         Batch_Pool<HitBatch> &pool, Camera &camera)
+         Batch_Pool<HitBatch> &pool, Camera &camera, uint8_t chip = 0)
         : m_hit_queue(input_queue),
           m_sorted_hit_queue(output_queue),
-          parsehit(pool, camera),
+          parsehit(pool, camera, chip),
           pool(pool) {}
 
     void sort_emit(U64BatchPtr batch, std::stop_token stop) {
@@ -121,11 +127,35 @@ class Sort {
             pthread_setname_np(pthread_self(), "Sorter");
             while (not stop.stop_requested()) {
                 if (m_hit_queue.front()) {
-                    U64BatchPtr batch = std::move(*m_hit_queue.front());
+                    auto message = std::move(*m_hit_queue.front());
+                    m_hit_queue.pop();
+                    if (std::holds_alternative<EndOfFile>(message)) {
+                        if (buffer_filled) {
+                            auto hit_batch = parsehit.parse_no_toa(
+                                buffer_.middle(), buffer_.end());
+                            std::transform(buffer_.middle(), buffer_.end(),
+                                           hit_batch->toa.begin(),
+                                           [](auto b) { return b.toa; });
+                            in_out -= hit_batch->size;
+                            adaptive_backoff backoff;
+                            while (not m_sorted_hit_queue.try_push(
+                                std::move(hit_batch))) {
+                                backoff.pause();
+                                if (stop.stop_requested()) return;
+                            }
+                            buffer_filled = false;
+                        }
+                        adaptive_backoff backoff;
+                        while (not m_sorted_hit_queue.try_push(EndOfFile{})) {
+                            backoff.pause();
+                            if (stop.stop_requested()) return;
+                        }
+                        return;
+                    }
+                    U64BatchPtr batch = std::move(std::get<U64BatchPtr>(message));
                     DEBUG_ASSERT(batch);
                     const auto batch_size = batch->size;
-                    m_hit_queue.pop();
-                    if (batch_size == 0) return;
+                    if (batch_size == 0) continue;
 
                     if (not buffer_filled) {
                         fill_buffer(std::move(batch), stop);

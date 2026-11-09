@@ -84,6 +84,7 @@ class ParseHit {
         }
         return out_batch;
     }
-    ParseHit(Batch_Pool<HitBatch> &t_batch_pool, Camera &camera)
-        : batch_pool(t_batch_pool), camera(camera) {}
+    ParseHit(Batch_Pool<HitBatch> &t_batch_pool, Camera &camera,
+             uint8_t chip = 0)
+        : batch_pool(t_batch_pool), chip_nr(chip), camera(camera) {}
 };

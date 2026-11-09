@@ -18,19 +18,13 @@
 #include "Parsing/ParseTrigger.hpp"
 #include "QueueUtility/Extractor.hpp"
 #include "QueueUtility/Injector.hpp"
-#include "Utility/MPMCQueue.h"
 #include "Utility/Memory_Map.hpp"
 #include "Utility/SPSCQueue.h"
 #include "Utility/helper.hpp"
 
-using U64MPMC = rigtorp::MPMCQueue<U64BatchPtr>;
-using U64SPSC = rigtorp::SPSCQueue<U64BatchPtr>;
-
-using TriggerMPMC = rigtorp::MPMCQueue<TriggerBatchPtr>;
-using TriggerSPSC = rigtorp::SPSCQueue<TriggerBatchPtr>;
-
-using HitMPMC = rigtorp::MPMCQueue<HitBatchPtr>;
-using HitSPSC = rigtorp::SPSCQueue<HitBatchPtr>;
+using U64SPSC = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
+using TriggerSPSC = rigtorp::SPSCQueue<QueueMessage<TriggerBatchPtr>>;
+using HitSPSC = rigtorp::SPSCQueue<QueueMessage<HitBatchPtr>>;
 
 using U64InjSP = Injector<U64SPSC, U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>;
 template <size_t N>
@@ -142,13 +136,10 @@ class Parser {
     using Sort_t = Sort<U64SPSC, HitSPSC>;
     std::array<Sort_t, 4> sort_hits =
         make_array_l<Sort_t>(std::make_index_sequence<4>{}, [this](int i) {
-            return Sort_t(m_batch_handle.hit_queue[i],
-                          m_batch_handle.sorted_hit_queue[i],
-                          m_batch_handle.Hitbatch_pool, camera_);
+            return Sort_t(
+                m_batch_handle.hit_queue[i], m_batch_handle.sorted_hit_queue[i],
+                m_batch_handle.Hitbatch_pool, camera_, static_cast<uint8_t>(i));
         });
-
-    // std::array<Sink<HitSPSC, HitBatchPtr>, 4> sinks;
-    // std::array<Sink<U64SPSC, U64BatchPtr>, 4> sinks;
 
     Merger merger{m_batch_handle.Hitbatch_pool,
                   make_array_l<Extractor<HitSPSC, HitBatchPtr>>(
@@ -157,11 +148,6 @@ class Parser {
                               m_batch_handle.sorted_hit_queue[i]);
                       })};
 
-    // Temporary Sinks;
-    // Sink<Merger, HitBatchPtr> hit_sink;
-    // Sink<TriggerMerger, TriggerBatchPtr> trigger_sink;
-    //
-    //
     HitSPSC out_queue{QUEUE_SIZE};
     Delay<Merger, TriggerMerger, HitSPSC> delay;
     Sink<HitSPSC, HitBatchPtr> sink;
@@ -174,20 +160,19 @@ class Parser {
                 m_batch_handle.Hitbatch_pool) {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
-            // sinks[i].start(m_batch_handle.sorted_hit_queue[i]);
-            // sinks[i].start(m_batch_handle.hit_queue[i]);
         }
         sink.start(out_queue);
-        merger.set_stop_token(sink.get_stop_token());
-        // o
-        // hit_sink.start(merger);
-        // merger.set_stop_token(hit_sink.get_stop_token());
-        // trigger_sink.start(trigger_out_queue);
     };
     void parse() { auto ec [[maybe_unused]] = header.parse(map); }
     void flush() {
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,
                               [](auto& inj) { inj.flush(); });
         m_batch_handle.pusher.trigger_inj.flush();
+    }
+    void finish() {
+        std::ranges::for_each(m_batch_handle.pusher.hit_inj,
+                              [](auto& inj) { inj.finish(); });
+        m_batch_handle.pusher.trigger_inj.finish();
+        sink.wait();
     }
 };

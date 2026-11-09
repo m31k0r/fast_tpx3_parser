@@ -1,74 +1,70 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
-#include <iostream>
-#include <print>
+#include <optional>
+#include <libassert/assert.hpp>
+
+#include "QueueUtility/QueueMessage.hpp"
 
 template <class InQueue, size_t N, typename T>
 class SPSCs2SPSC {
-    T current_batch;
+    static_assert(N > 0);
+    using Message = QueueMessage<T>;
+    std::optional<Message> current;
     std::array<InQueue, N>& in;
+    std::array<bool, N> ended{};
     size_t sequence_number = 0;
-
-    T next_batch() {
-        auto front = in[sequence_number % N].front();
-        if (not front) {
-            return nullptr;
-        }
-
-        const auto front_seq_nr = front->get()->sequence_number;
-        if (front_seq_nr == sequence_number) {
-            T batch = std::move(*front);
-            in[sequence_number % N].pop();
-            sequence_number++;
-            return batch;
-        }
-
-        while (in[sequence_number % N].front()) {
-            auto val = std::move(*in[sequence_number % N].front());
-            std::cout << val->sequence_number << std::endl;
-            in[sequence_number % N].pop();
-        }
-        PANIC(std::format("No match found but queue is not empty {}!={}",
-                          front_seq_nr, sequence_number));
-        return nullptr;
-    }
+    bool eof_emitted = false;
 
    public:
     SPSCs2SPSC(std::array<InQueue, N>& queues) : in(queues) {}
 
-    T* front() {
-        if (not current_batch) {
-            current_batch = next_batch();
+    Message* front() {
+        if (current) return &*current;
+        if (eof_emitted) return nullptr;
+
+        for (size_t i = 0; i < N; ++i) {
+            if (not ended[i]) {
+                auto* message = in[i].front();
+                if (message && std::holds_alternative<EndOfFile>(*message)) {
+                    in[i].pop();
+                    ended[i] = true;
+                }
+            }
         }
-        if (not current_batch) {
+        if (std::all_of(ended.begin(), ended.end(), [](bool e) { return e; })) {
+            current.emplace(EndOfFile{});
+            eof_emitted = true;
+            return &*current;
+        }
+
+        const auto index = sequence_number % N;
+        if (ended[index]) {
+            for (size_t i = 0; i < N; ++i) {
+                auto* message = in[i].front();
+                ASSERT(not message || std::holds_alternative<EndOfFile>(*message),
+                       "Missing trigger batch sequence");
+            }
             return nullptr;
         }
-        return &current_batch;
-    };
-    void pop() {
-        // DEBUG_ASSERT(current_batch,
-        //              "Should not pop if current_batch is nullptr");
-        current_batch = nullptr;
-    };
+        auto* message = in[index].front();
+        if (not message) return nullptr;
+        auto& batch = std::get<T>(*message);
+        ASSERT(batch && batch->sequence_number == sequence_number,
+               "Unexpected trigger batch sequence");
+        current.emplace(std::move(batch));
+        in[index].pop();
+        ++sequence_number;
+        return &*current;
+    }
 
-    void print_state() {
-        std::print("Seq: {}  -  ", sequence_number);
-        for (auto& queue : in) {
-            auto front = queue.front();
-            if (not front) {
-                std::print("Empty; ");
-                continue;
-            }
-            std::print("S:{}L:{}", front->get()->sequence_number, queue.size());
-        }
-        std::println();
-    };
+    void pop() { current.reset(); }
+
     size_t size() {
-        auto min = std::min_element(
-            in.begin(), in.end(),
-            [](auto& e1, auto& e2) { return e1.size() < e2.size(); });
-        return min->size();
+        size_t count = current ? 1 : 0;
+        for (auto& queue : in) count += queue.size();
+        return count;
     }
 };

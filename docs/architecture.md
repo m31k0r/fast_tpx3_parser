@@ -63,6 +63,15 @@ currently accumulating batches. When a batch fills, it is submitted to its
 queue and replaced with a batch from the pool. Queue capacity and pool size are
 defined in `src/Constants.hpp`.
 
+Pipeline queues carry a `QueueMessage`, a variant of a batch pointer and
+`EndOfFile`. `flush()` sends any pending batch without ending the stream;
+`finish()` flushes, sends EOF to each input queue, and waits for the sink.
+No further input may be pushed after finish. Sorters emit buffered hits before
+EOF, and the hit and trigger mergers wait for all their inputs to end. The
+delay stage processes remaining hits after trigger EOF using the last observed
+delay trigger (or zero if none was observed), then flushes and sends EOF to the
+sink.
+
 ### Sorting and merging
 
 - `SortingBuffer` is a fixed-capacity ordered window. `Sort` consumes input
@@ -88,8 +97,8 @@ defined in `src/Constants.hpp`.
 - There is no configured CLI/application target or documented supported
   command-line interface.
 - The benchmark expects a local `tpx3.tpx3` file; no sample input is checked in.
-- A final partially filled parser batch is not explicitly flushed by
-  `Parser::parse`.
+- Callers must invoke `Parser::finish()` after the last parse to flush the
+  remaining batches and signal EOF; `Parser::parse()` does not do this.
 - Frame words are recognized by their nibble but are not processed in the
   parser.
 - The architecture describes the current source layout; it should not be read
