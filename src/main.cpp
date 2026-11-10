@@ -2,6 +2,7 @@
 #include <iostream>
 #include <numeric>
 #include "Parser.hpp"
+#include "Operations/Exporter.hpp"
 #include "Utility/Memory_Map.hpp"
 
 #include <algorithm>
@@ -94,6 +95,8 @@ int main(int argc, char* argv[]) {
     const auto file_size_gb =
         std::distance(mmap.begin(), mmap.end()) * sizeof(uint64_t) * 1e-9;
     Parser<4> parser(std::move(mmap));
+    Exporter<HitSPSC, HitBatchPtr> exporter;
+    exporter.start(parser.out_queue);
     for (int i = 0; i < num_runs; ++i) {
         const auto start = std::chrono::steady_clock::now();
         parser.parse();
@@ -104,6 +107,7 @@ int main(int argc, char* argv[]) {
     }
 
     parser.finish();
+    exporter.wait();
     printHistogram(time_per_run, 10, "Gb/s");
     return 0;
 }
