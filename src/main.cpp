@@ -1,6 +1,7 @@
 #include <chrono>
 #include <iostream>
 #include <numeric>
+#include "Parsing/tpx3_helper.hpp"
 #include "Parser.hpp"
 #include "Operations/Exporter.hpp"
 #include "Utility/Memory_Map.hpp"
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <numeric>
 #include <string>
 #include <thread>
@@ -94,12 +96,22 @@ int main(int argc, char* argv[]) {
     MemoryMap mmap(filename);
     const auto file_size_gb =
         std::distance(mmap.begin(), mmap.end()) * sizeof(uint64_t) * 1e-9;
-    Parser<4> parser(std::move(mmap));
+    Parser<4> parser;
     Exporter<HitSPSC, HitBatchPtr> exporter;
     exporter.start(parser.out_queue);
     for (int i = 0; i < num_runs; ++i) {
         const auto start = std::chrono::steady_clock::now();
-        parser.parse();
+        auto* running = mmap.begin();
+        while (mmap.end() - running > 1) {
+            const auto parsed_header = tpx3_helper::parse_header(running);
+            if (not parsed_header) break;
+
+            const auto header = *parsed_header;
+            if (header.end > mmap.end()) break;
+
+            parser.parseHeader(header);
+            running = header.end;
+        }
         const auto stop = std::chrono::steady_clock::now();
         const auto time_s = std::chrono::duration<double>(stop - start).count();
         time_per_run.push_back(file_size_gb / time_s);
