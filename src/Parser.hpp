@@ -116,7 +116,6 @@ class Parser {
 
     // Main Parser
     ParseHeader<Pusher<Trigger_Parse_Threads>> header;
-    MemoryMap map;
 
     // Trigger
     using Worker_t = Worker<ParseTrigger, U64SPSC, TriggerSPSC>;
@@ -155,16 +154,17 @@ class Parser {
     Delay<Merger, TriggerMerger, HitSPSC> delay;
 
    public:
-    Parser(MemoryMap t_map)
+    Parser()
         : header(m_batch_handle.pusher),
-          map(std::move(t_map)),
           delay(merger, trigger_out_queue, out_queue,
                 m_batch_handle.Hitbatch_pool) {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
         }
     };
-    void parse() { auto ec [[maybe_unused]] = header.parse(map); }
+    void parseHeader(tpx3_helper::Header t_header) {
+        header.parse_header(t_header);
+    }
     void flush() {
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,
                               [](auto& inj) { inj.flush(); });
