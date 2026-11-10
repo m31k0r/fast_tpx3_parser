@@ -79,6 +79,21 @@ add_executable(unit_tests
         src/QueueUtility/Extractor_test.cpp
         src/QueueUtility/Injector_test.cpp
         src/QueueUtility/Sequencer_test.cpp
+        src/Batch/Batch_test.cpp
+        src/Compare_test.cpp
+        src/Operations/Sink_test.cpp
+        src/Parsing/Camera_test.cpp
+        src/Parsing/ParseHeader_test.cpp
+        src/Parsing/ParseHits_test.cpp
+        src/Parsing/ParseTrigger_test.cpp
+        src/Parsing/tpx3_helper_test.cpp
+        src/QueueUtility/Iterator_test.cpp
+        src/Utility/AdaptivBackoff_test.cpp
+        src/Utility/Memory_Map_test.cpp
+        src/Utility/bits_test.cpp
+        src/Utility/helper_test.cpp
+        src/Utility/optional_test.cpp
+        src/clock_correction_test.cpp
         src/Parsing/Rotation_test.cpp
         src/Operations/Sorter_test.cpp
         src/Operations/Worker_test.cpp

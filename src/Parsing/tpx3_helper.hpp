@@ -12,11 +12,6 @@ constexpr uint64_t FRAME_NIBBLE = 0x7;
 constexpr uint64_t TRIGGER_NIBBLE = 0x6;
 constexpr uint64_t HIT_NIBBLE = 0xb;
 
-constexpr auto to_nibble(auto t_data_entry) {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-    return t_data_entry >> 60;
-}
-
 namespace tpx3_helper {
 
 enum class Status : std::uint8_t {
