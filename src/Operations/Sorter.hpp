@@ -50,13 +50,6 @@ class Sort {
     std::jthread m_thread;
 
    public:
-    ~Sort() {
-        if (m_thread.joinable()) {
-            m_thread.request_stop();
-            m_thread.join();
-        }
-        std::cout << in_out << " == 0 " << std::endl;
-    }
     Sort(InQueue &input_queue, OutQueue &output_queue,
          Batch_Pool<HitBatch> &pool, Camera &camera, uint8_t chip = 0)
         : m_hit_queue(input_queue),
@@ -97,7 +90,6 @@ class Sort {
                 [this](uint64_t t_data) { return parsehit.parse(t_data); });
             std::sort(buffer_.middle(), buffer_.end(), Compare);
             buffer_filled = true;
-            std::cout << "Buffer is filled" << std::endl;
         } else {
             const auto n = batch->size;
             std::transform(

@@ -26,9 +26,8 @@ struct RecordingPusher {
 auto temporary_path() {
     return std::filesystem::temp_directory_path() /
            ("fast_tpx3_parser_header_" +
-            std::to_string(std::chrono::steady_clock::now()
-                               .time_since_epoch()
-                               .count()) +
+            std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count()) +
             ".bin");
 }
 }  // namespace
@@ -39,17 +38,18 @@ TEST_CASE("Header parser routes hit and trigger words") {
     const uint64_t hit = (uint64_t{HIT_NIBBLE} << 60) | (uint64_t{1} << 44);
     const uint64_t trigger =
         (uint64_t{TRIGGER_NIBBLE} << 60) | (uint64_t{3} << 56);
-    const std::array<uint64_t, 4> words{
-        uint64_t{0x7} << 60, hit, trigger, uint64_t{FRAME_NIBBLE} << 60};
+    const std::array<uint64_t, 4> words{uint64_t{0x7} << 60, hit, trigger,
+                                        uint64_t{FRAME_NIBBLE} << 60};
 
     parser.parse_header({words.data(), words.data() + words.size(), 3});
 
-    REQUIRE((pusher.hits ==
-             std::vector<std::pair<uint64_t, uint8_t>>{{hit, 3}}));
+    REQUIRE(
+        (pusher.hits == std::vector<std::pair<uint64_t, uint8_t>>{{hit, 3}}));
     REQUIRE((pusher.triggers == std::vector<uint64_t>{trigger}));
 }
 
-TEST_CASE("Header parser processes mapped chunks and rejects oversized chunks") {
+TEST_CASE(
+    "Header parser processes mapped chunks and rejects oversized chunks") {
     const auto filename = temporary_path();
     const uint64_t header = uint64_t{'T'} | (uint64_t{'P'} << 8) |
                             (uint64_t{'X'} << 16) | (uint64_t{'3'} << 24) |

@@ -2,19 +2,27 @@
 #include <iostream>
 #include <stop_token>
 #include <thread>
-#include "../Batch/Batch.hpp"
-#include "../QueueUtility/QueueConcepts.hpp"
-#include "../QueueUtility/QueueMessage.hpp"
+#include <variant>
+#include "Batch/Batch.hpp"
+#include "QueueUtility/QueueConcepts.hpp"
+#include "QueueUtility/QueueMessage.hpp"
+#include "Utility/AdaptivBackoff.hpp"
 
 template <typename Queue, typename BatchPtr>
 class Sink {
     size_t counter_batch = 0;
     size_t counter = 0;
     std::jthread m_thread;
+    bool received_flush = false;
 
     void consume(const BatchPtr& batch) {
         ++counter_batch;
         counter += batch->size;
+        if (batch->size != BATCH_SIZE) {
+            received_flush = true;
+        } else {
+            received_flush = false;
+        }
     }
 
    public:
@@ -48,6 +56,12 @@ class Sink {
     }
     void wait() {
         if (m_thread.joinable()) m_thread.join();
+    }
+    void wait_for_flush() {
+        adaptive_backoff backoff;
+        while (not received_flush) {
+            backoff.pause();
+        }
     }
     ~Sink() {
         std::cout << "Received " << counter_batch << " batches with " << counter

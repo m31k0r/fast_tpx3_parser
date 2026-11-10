@@ -175,4 +175,5 @@ class Parser {
         m_batch_handle.pusher.trigger_inj.finish();
         sink.wait();
     }
+    void wait_for_flush() { sink.wait_for_flush(); }
 };
