@@ -45,6 +45,11 @@ struct Hit {
     uint16_t y;
     uint16_t delay = 0;
     uint16_t trigger_diff = 0;
+
+    friend std::ostream& operator<<(std::ostream& os, const Hit& hit) {
+        return os << hit.toa << ',' << hit.tot << ',' << hit.x << ',' << hit.y
+                  << ',' << hit.delay << ',' << hit.trigger_diff;
+    }
 };
 struct alignas(std::hardware_destructive_interference_size) HitBatch {
     std::array<uint64_t, BATCH_SIZE> toa{};
@@ -66,6 +71,11 @@ struct alignas(std::hardware_destructive_interference_size) HitBatch {
         delay[size] = hit.delay;
         trigger_diff[size] = hit.trigger_diff;
         size++;
+    }
+    Hit operator[](size_t index) {
+        // Return a Hit by value because the data is stored in SoA format.
+        return Hit{toa[index], tot[index],   x[index],
+                   y[index],   delay[index], trigger_diff[index]};
     }
 };
 
