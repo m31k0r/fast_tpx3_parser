@@ -43,9 +43,15 @@ a queue; it does not decode or persist them.
 - `tpx3_helper::parse_header` validates the `TPX3` marker in the first four
   bytes of a word, reads the chip number and chunk-size field, and returns the
   word range associated with that chunk.
-- `Parser::parse` walks the mapped words. It classifies each word by its high
-  nibble: hit (`0xb`) words go to a chip-specific queue, trigger (`0x6`) words
-  go to the trigger queue, and frame (`0x7`) words are currently ignored.
+- `make_parser<N>()` returns an owning parser pointer and references to its
+  header input and hit output queues. The queue references remain valid while
+  the parser is alive. Feed headers and an `EndOfFile` to the input queue
+  while `Parser::parse()` runs, and drain the output concurrently through its
+  `EndOfFile`. Call `finish()` after parsing to flush the pipeline. The source
+  of a header's word range must remain alive until parsing finishes.
+- `Parser::parse` classifies each word by its high nibble: hit (`0xb`) words
+  go to a chip-specific queue, trigger (`0x6`) words go to the trigger queue,
+  and frame (`0x7`) words are currently ignored.
 - The parser queues the original encoded 64-bit words. The `Hit` and `Trigger`
   helper types provide field/time conversions, but are not used to decode
   records in the parser-to-queue path.

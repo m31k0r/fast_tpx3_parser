@@ -3,8 +3,10 @@
 #include <array>
 #include <chrono>
 #include <thread>
+#include <type_traits>
 #include <variant>
 
+#include "Parser.hpp"
 #include "Operations/Delay.hpp"
 #include "Operations/MergeSPSC.hpp"
 #include "Operations/Merging_Buffer.hpp"
@@ -37,6 +39,27 @@ struct TestTriggerWork {
         return output;
     }
 };
+}
+
+TEST_CASE("Parser factory connects its input and output queues", "[EOF]") {
+    STATIC_REQUIRE_FALSE(std::is_default_constructible_v<Parser<1>>);
+    auto [parser, input, output] = make_parser<1>();
+    const uint64_t hit = (uint64_t{HIT_NIBBLE} << 60) |
+                         (uint64_t{23} << 20) | (uint64_t{1} << 30);
+    input.push(tpx3_helper::Header{&hit, &hit + 1, 0});
+    input.push(EndOfFile{});
+    parser->parse();
+    parser->finish();
+    auto* message = wait_front(output);
+    REQUIRE(message);
+    REQUIRE(std::holds_alternative<HitBatchPtr>(*message));
+    REQUIRE(std::get<HitBatchPtr>(*message)->size == 1);
+    REQUIRE(std::get<HitBatchPtr>(*message)->tot[0] == 23);
+    output.pop();
+    message = wait_front(output);
+    REQUIRE(message);
+    REQUIRE(std::holds_alternative<EndOfFile>(*message));
+    output.pop();
 }
 
 TEST_CASE("Extractor preserves EOF after buffered partial batches", "[EOF]") {

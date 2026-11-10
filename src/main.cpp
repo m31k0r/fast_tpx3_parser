@@ -94,15 +94,13 @@ int main(int argc, char* argv[]) {
     MemoryMap mmap(filename);
     const auto file_size_gb =
         std::distance(mmap.begin(), mmap.end()) * sizeof(uint64_t) * 1e-9;
-    Parser<4> parser(std::move(mmap));
+    auto [parser, header_queue, output_queue] = make_parser<4>();
     Exporter<HitSPSC, HitBatchPtr> exporter;
-    exporter.start(parser.out_queue);
+    exporter.start(output_queue);
     for (int i = 0; i < num_runs; ++i) {
         const auto start = std::chrono::steady_clock::now();
-        HeaderSPSC header_queue(QUEUE_SIZE);
-        std::thread parse_thread([&] { parser.parse(header_queue); });
-        auto ec = ParseHeader<Pusher<4>>::feed(parser.mapped_file(),
-                                               header_queue);
+        std::thread parse_thread([&] { parser->parse(); });
+        auto ec = ParseHeader<Pusher<4>>::feed(mmap, header_queue);
         parse_thread.join();
         if (ec) std::cerr << "Feeding headers failed: " << ec.message() << '\n';
         const auto stop = std::chrono::steady_clock::now();
@@ -111,7 +109,7 @@ int main(int argc, char* argv[]) {
         std::cout << "." << std::flush;
     }
 
-    parser.finish();
+    parser->finish();
     exporter.wait();
     printHistogram(time_per_run, 10, "Gb/s");
     return 0;

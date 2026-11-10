@@ -2,6 +2,7 @@
 #include <assert.hpp>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <print>
 #include <utility>
 #include "Batch/Batch.hpp"
@@ -18,7 +19,6 @@
 #include "Parsing/ParseTrigger.hpp"
 #include "QueueUtility/Extractor.hpp"
 #include "QueueUtility/Injector.hpp"
-#include "Utility/Memory_Map.hpp"
 #include "Utility/SPSCQueue.h"
 #include "Utility/helper.hpp"
 
@@ -26,6 +26,19 @@ using HeaderSPSC = rigtorp::SPSCQueue<HeaderMessage>;
 using U64SPSC = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
 using TriggerSPSC = rigtorp::SPSCQueue<QueueMessage<TriggerBatchPtr>>;
 using HitSPSC = rigtorp::SPSCQueue<QueueMessage<HitBatchPtr>>;
+
+template <size_t Trigger_Parse_Threads>
+class Parser;
+
+template <size_t Trigger_Parse_Threads>
+struct ParserComponents {
+    std::unique_ptr<Parser<Trigger_Parse_Threads>> parser;
+    HeaderSPSC& input_queue;
+    HitSPSC& output_queue;
+};
+
+template <size_t Trigger_Parse_Threads>
+ParserComponents<Trigger_Parse_Threads> make_parser();
 
 using U64InjSP = Injector<U64SPSC, U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>;
 template <size_t N>
@@ -108,6 +121,9 @@ struct BatchHandle {
 
 template <size_t Trigger_Parse_Threads>
 class Parser {
+    friend ParserComponents<Trigger_Parse_Threads>
+    make_parser<Trigger_Parse_Threads>();
+
     Camera camera_;
     BatchHandle<Trigger_Parse_Threads> m_batch_handle;
     std::array<ParseTrigger, Trigger_Parse_Threads> m_parser =
@@ -117,7 +133,6 @@ class Parser {
 
     // Main Parser
     ParseHeader<Pusher<Trigger_Parse_Threads>> header;
-    MemoryMap map;
 
     // Trigger
     using Worker_t = Worker<ParseTrigger, U64SPSC, TriggerSPSC>;
@@ -149,24 +164,22 @@ class Parser {
                               m_batch_handle.sorted_hit_queue[i]);
                       })};
 
-   public:
+    HeaderSPSC input_queue{QUEUE_SIZE};
     HitSPSC out_queue{QUEUE_SIZE};
 
-   private:
     Delay<Merger, TriggerMerger, HitSPSC> delay;
 
-   public:
-    Parser(MemoryMap t_map)
+    Parser()
         : header(m_batch_handle.pusher),
-          map(std::move(t_map)),
           delay(merger, trigger_out_queue, out_queue,
                 m_batch_handle.Hitbatch_pool) {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
         }
     };
-    MemoryMap& mapped_file() { return map; }
-    void parse(HeaderSPSC& header_queue) { header.parse(header_queue); }
+
+   public:
+    void parse() { header.parse(input_queue); }
     void flush() {
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,
                               [](auto& inj) { inj.flush(); });
@@ -178,3 +191,12 @@ class Parser {
         m_batch_handle.pusher.trigger_inj.finish();
     }
 };
+
+template <size_t Trigger_Parse_Threads>
+ParserComponents<Trigger_Parse_Threads> make_parser() {
+    auto parser = std::unique_ptr<Parser<Trigger_Parse_Threads>>(
+        new Parser<Trigger_Parse_Threads>());
+    auto& input_queue = parser->input_queue;
+    auto& output_queue = parser->out_queue;
+    return {std::move(parser), input_queue, output_queue};
+}
