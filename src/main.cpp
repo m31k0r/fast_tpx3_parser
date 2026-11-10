@@ -99,7 +99,12 @@ int main(int argc, char* argv[]) {
     exporter.start(parser.out_queue);
     for (int i = 0; i < num_runs; ++i) {
         const auto start = std::chrono::steady_clock::now();
-        parser.parse();
+        HeaderSPSC header_queue(QUEUE_SIZE);
+        std::thread parse_thread([&] { parser.parse(header_queue); });
+        auto ec = ParseHeader<Pusher<4>>::feed(parser.mapped_file(),
+                                               header_queue);
+        parse_thread.join();
+        if (ec) std::cerr << "Feeding headers failed: " << ec.message() << '\n';
         const auto stop = std::chrono::steady_clock::now();
         const auto time_s = std::chrono::duration<double>(stop - start).count();
         time_per_run.push_back(file_size_gb / time_s);

@@ -6,11 +6,13 @@
 #include <filesystem>
 #include <fstream>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
 #include "ParseHeader.hpp"
 #include "Utility/Memory_Map.hpp"
+#include "Utility/SPSCQueue.h"
 
 namespace {
 struct RecordingPusher {
@@ -22,6 +24,16 @@ struct RecordingPusher {
     }
     void insert_trigger(uint64_t word) { triggers.push_back(word); }
 };
+
+template <typename Parser>
+std::error_code parse_all(Parser& parser, MemoryMap& mapped) {
+    rigtorp::SPSCQueue<HeaderMessage> queue(4);
+    std::error_code ec;
+    std::thread feeder([&] { ec = Parser::feed(mapped, queue); });
+    parser.parse(queue);
+    feeder.join();
+    return ec;
+}
 
 auto temporary_path() {
     return std::filesystem::temp_directory_path() /
@@ -68,7 +80,7 @@ TEST_CASE(
         RecordingPusher pusher;
         ParseHeader parser(pusher);
         MemoryMap mapped(filename.string());
-        REQUIRE_FALSE(parser.parse(mapped));
+        REQUIRE_FALSE(parse_all(parser, mapped));
         REQUIRE(pusher.hits.size() == 1);
         REQUIRE((pusher.hits[0] == std::pair<uint64_t, uint8_t>{hit, 1}));
         REQUIRE((pusher.triggers == std::vector<uint64_t>{trigger}));
@@ -87,7 +99,7 @@ TEST_CASE(
         RecordingPusher pusher;
         ParseHeader parser(pusher);
         MemoryMap mapped(filename.string());
-        REQUIRE(parser.parse(mapped) ==
+        REQUIRE(parse_all(parser, mapped) ==
                 std::make_error_code(std::errc::invalid_seek));
         REQUIRE(pusher.hits.empty());
     }

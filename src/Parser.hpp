@@ -22,6 +22,7 @@
 #include "Utility/SPSCQueue.h"
 #include "Utility/helper.hpp"
 
+using HeaderSPSC = rigtorp::SPSCQueue<HeaderMessage>;
 using U64SPSC = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
 using TriggerSPSC = rigtorp::SPSCQueue<QueueMessage<TriggerBatchPtr>>;
 using HitSPSC = rigtorp::SPSCQueue<QueueMessage<HitBatchPtr>>;
@@ -164,7 +165,8 @@ class Parser {
             sort_hits[i].start_worker();
         }
     };
-    void parse() { auto ec [[maybe_unused]] = header.parse(map); }
+    MemoryMap& mapped_file() { return map; }
+    void parse(HeaderSPSC& header_queue) { header.parse(header_queue); }
     void flush() {
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,
                               [](auto& inj) { inj.flush(); });

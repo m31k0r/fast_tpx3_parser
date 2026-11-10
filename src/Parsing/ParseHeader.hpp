@@ -6,10 +6,15 @@
 #include <iterator>
 #include <ostream>
 #include <system_error>
+#include <variant>
 
 #include "Constants.hpp"
+#include "QueueUtility/QueueMessage.hpp"
 #include "Utility/Memory_Map.hpp"
+#include "Utility/AdaptivBackoff.hpp"
 #include "tpx3_helper.hpp"
+
+using HeaderMessage = QueueMessage<tpx3_helper::Header>;
 
 template <typename Pusher>
 class ParseHeader {
@@ -38,32 +43,53 @@ class ParseHeader {
             }
         }
     };
-    std::error_code parse(MemoryMap &t_mmap) {
+    // Consumes headers until EndOfFile is received.
+    template <typename Queue>
+    void parse(Queue &t_queue) {
+        adaptive_backoff backoff;
+        while (true) {
+            auto *front = t_queue.front();
+            if (front == nullptr) {
+                backoff.pause();
+                continue;
+            }
+            backoff.reset();
+            const auto message = *front;
+            t_queue.pop();
+            if (std::holds_alternative<EndOfFile>(message)) {
+                return;
+            }
+            parse_header(std::get<tpx3_helper::Header>(message));
+        }
+    }
+    // Splits the mapped file into headers and feeds them to the queue,
+    // always terminating the stream with EndOfFile.
+    template <typename Queue>
+    static std::error_code feed(MemoryMap &t_mmap, Queue &t_queue) {
+        const auto push = [&t_queue](auto message) {
+            adaptive_backoff backoff;
+            while (not t_queue.try_push(message)) {
+                backoff.pause();
+            }
+        };
+        std::error_code ec;
         const auto *running = t_mmap.begin();
-        // const auto total = std::distance(t_mmap.begin(), t_mmap.end());
-        // auto last_progress = 0;
         while (std::next(running) < t_mmap.end()) {
             auto opt = tpx3_helper::parse_header(running);
             if (not opt) {
-                return std::make_error_code(std::errc::io_error);
+                ec = std::make_error_code(std::errc::io_error);
+                break;
             }
             auto header = opt.value();
             running = header.end;
             if (header.end > t_mmap.end()) {
-                return std::make_error_code(std::errc::invalid_seek);
+                ec = std::make_error_code(std::errc::invalid_seek);
+                break;
             }
-            parse_header(header);
-            // const auto processed = running - t_mmap.begin();
-            // const int progress =
-            //     total > 0 ? static_cast<int>(100.0 * processed / total)
-            //               : 100;
-            //
-            // if (progress != last_progress) {
-            //     print_progress(processed, total);
-            //     last_progress = progress;
-            // }
+            push(header);
         }
-        return {};
+        push(EndOfFile{});
+        return ec;
     }
     ParseHeader(Pusher &batch_handle) : m_pusher(batch_handle) {}
 };
