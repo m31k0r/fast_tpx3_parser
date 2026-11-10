@@ -9,7 +9,6 @@
 #include "Compare.hpp"
 #include "Constants.hpp"
 #include "Operations/Delay.hpp"
-#include "Operations/Exporter.hpp"
 #include "Operations/MergeSPSC.hpp"
 #include "Operations/Merging_Buffer.hpp"
 #include "Operations/Sink.hpp"
@@ -149,9 +148,11 @@ class Parser {
                               m_batch_handle.sorted_hit_queue[i]);
                       })};
 
+   public:
     HitSPSC out_queue{QUEUE_SIZE};
+
+   private:
     Delay<Merger, TriggerMerger, HitSPSC> delay;
-    Exporter<HitSPSC, HitBatchPtr> sink;
 
    public:
     Parser(MemoryMap t_map)
@@ -162,7 +163,6 @@ class Parser {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
         }
-        sink.start(out_queue);
     };
     void parse() { auto ec [[maybe_unused]] = header.parse(map); }
     void flush() {
@@ -174,7 +174,5 @@ class Parser {
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,
                               [](auto& inj) { inj.finish(); });
         m_batch_handle.pusher.trigger_inj.finish();
-        sink.wait();
     }
-    void wait_for_flush() { sink.wait_for_flush(); }
 };
