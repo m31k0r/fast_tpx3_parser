@@ -47,8 +47,8 @@ class Delay {
                       hit.tot(),
                       hit.x(),
                       hit.y(),
-                      static_cast<uint16_t>(hit.toa() - last_delay_time),
-                      static_cast<uint16_t>(trigger_diff)};
+                      static_cast<uint32_t>(hit.toa() - last_delay_time),
+                      static_cast<uint32_t>(trigger_diff)};
         while (not inj.try_push(out)) {
             backoff.pause();
             if (stop.stop_requested()) return Step::Stopped;

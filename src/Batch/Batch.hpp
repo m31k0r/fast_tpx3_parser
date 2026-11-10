@@ -43,8 +43,8 @@ struct Hit {
     uint64_t tot;
     uint16_t x;
     uint16_t y;
-    uint16_t delay = 0;
-    uint16_t trigger_diff = 0;
+    uint32_t delay = 0;
+    uint32_t trigger_diff = 0;
 
     friend std::ostream& operator<<(std::ostream& os, const Hit& hit) {
         return os << hit.toa << ',' << hit.tot << ',' << hit.x << ',' << hit.y
@@ -57,8 +57,8 @@ struct alignas(std::hardware_destructive_interference_size) HitBatch {
     std::array<uint16_t, BATCH_SIZE> x{};
     std::array<uint16_t, BATCH_SIZE> y{};
 
-    std::array<uint16_t, BATCH_SIZE> delay{};
-    std::array<uint16_t, BATCH_SIZE> trigger_diff{};
+    std::array<uint32_t, BATCH_SIZE> delay{};
+    std::array<uint32_t, BATCH_SIZE> trigger_diff{};
 
     size_t size{0};
     size_t sequence_number{0};

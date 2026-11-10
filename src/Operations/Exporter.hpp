@@ -72,5 +72,7 @@ class Exporter {
         std::cout << "Received " << counter_batch << " batches with " << counter
                   << " events\n";
     }
-    Exporter() : outfile("export.csv") {}
+    Exporter() : outfile("export.csv") {
+        outfile << "toa, tot, x, y, delay, trigger_diff\n";
+    }
 };

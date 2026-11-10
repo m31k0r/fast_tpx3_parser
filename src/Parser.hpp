@@ -9,6 +9,7 @@
 #include "Compare.hpp"
 #include "Constants.hpp"
 #include "Operations/Delay.hpp"
+#include "Operations/Exporter.hpp"
 #include "Operations/MergeSPSC.hpp"
 #include "Operations/Merging_Buffer.hpp"
 #include "Operations/Sink.hpp"
@@ -150,7 +151,7 @@ class Parser {
 
     HitSPSC out_queue{QUEUE_SIZE};
     Delay<Merger, TriggerMerger, HitSPSC> delay;
-    Sink<HitSPSC, HitBatchPtr> sink;
+    Exporter<HitSPSC, HitBatchPtr> sink;
 
    public:
     Parser(MemoryMap t_map)
