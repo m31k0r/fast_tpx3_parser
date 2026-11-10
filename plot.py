@@ -10,5 +10,14 @@ plt.hist(data[:,4], bins=1000)
 plt.axvline(np.mean(data[:,5]))
 plt.title("delay")
 
+plt.figure()
+H, xedges, yedges = np.histogram2d(
+    data[:,1], data[:,2],
+    bins=[514, 514],
+    range=[[0, 514], [0, 514]]
+)
+plt.imshow(H)
+
+
 plt.show()
 

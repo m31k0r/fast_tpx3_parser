@@ -1,9 +1,9 @@
 #include <chrono>
 #include <iostream>
 #include <numeric>
-#include "Parsing/tpx3_helper.hpp"
-#include "Parser.hpp"
 #include "Operations/Exporter.hpp"
+#include "Parser.hpp"
+#include "Parsing/tpx3_helper.hpp"
 #include "Utility/Memory_Map.hpp"
 
 #include <algorithm>
@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
     exporter.start(parser.out_queue);
     for (int i = 0; i < num_runs; ++i) {
         const auto start = std::chrono::steady_clock::now();
-        auto* running = mmap.begin();
+        const auto* running = mmap.begin();
         while (mmap.end() - running > 1) {
             const auto parsed_header = tpx3_helper::parse_header(running);
             if (not parsed_header) break;

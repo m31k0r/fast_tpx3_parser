@@ -6,7 +6,6 @@
 #include <utility>
 #include "Batch/Batch.hpp"
 #include "Batch/Batch_Pool.hpp"
-#include "Compare.hpp"
 #include "Constants.hpp"
 #include "Operations/Delay.hpp"
 #include "Operations/MergeSPSC.hpp"

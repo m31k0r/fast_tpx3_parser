@@ -80,7 +80,6 @@ add_executable(unit_tests
         src/QueueUtility/Injector_test.cpp
         src/QueueUtility/Sequencer_test.cpp
         src/Batch/Batch_test.cpp
-        src/Compare_test.cpp
         src/Operations/Sink_test.cpp
         src/Parsing/Camera_test.cpp
         src/Parsing/ParseHeader_test.cpp

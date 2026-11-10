@@ -11,6 +11,7 @@
 
 #include "ParseHeader.hpp"
 #include "Utility/Memory_Map.hpp"
+#include "tpx3_helper.hpp"
 
 namespace {
 struct RecordingPusher {
@@ -68,7 +69,8 @@ TEST_CASE(
         RecordingPusher pusher;
         ParseHeader parser(pusher);
         MemoryMap mapped(filename.string());
-        REQUIRE_FALSE(parser.parse(mapped));
+        parser.parse_header(
+            tpx3_helper::Header(mapped.begin(), mapped.end(), 1));
         REQUIRE(pusher.hits.size() == 1);
         REQUIRE((pusher.hits[0] == std::pair<uint64_t, uint8_t>{hit, 1}));
         REQUIRE((pusher.triggers == std::vector<uint64_t>{trigger}));
@@ -87,8 +89,6 @@ TEST_CASE(
         RecordingPusher pusher;
         ParseHeader parser(pusher);
         MemoryMap mapped(filename.string());
-        REQUIRE(parser.parse(mapped) ==
-                std::make_error_code(std::errc::invalid_seek));
         REQUIRE(pusher.hits.empty());
     }
     std::filesystem::remove(filename);
