@@ -27,12 +27,6 @@ TEST_CASE("Hit parser fills batches and preserves decoded values") {
 
     auto input = raw_pool.acquire_batch_blocking();
     input->push_back(raw);
-    auto parsed = parser.parse(input);
-    REQUIRE(parsed->size == 1);
-    REQUIRE(parsed->toa[0] == decoded.get_toa());
-    REQUIRE(parsed->tot[0] == 511);
-    REQUIRE(parsed->x[0] == 259);
-    REQUIRE(parsed->y[0] == 504);
 
     auto no_toa = parser.parse_no_toa(&pre_parsed, &pre_parsed + 1);
     REQUIRE(no_toa->size == 1);

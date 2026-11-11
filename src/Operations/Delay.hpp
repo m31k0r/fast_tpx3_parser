@@ -7,20 +7,19 @@
 #include "Batch/Batch.hpp"
 #include "Batch/Batch_Pool.hpp"
 #include "Constants.hpp"
+#include "Parsing/Camera.hpp"
 #include "QueueUtility/Extractor.hpp"
 #include "QueueUtility/Injector.hpp"
 #include "Utility/AdaptivBackoff.hpp"
 
 template <typename HitQueue, typename TriggerQueue, typename OutQueue>
 class Delay {
-    static constexpr uint8_t kTriggerType = 0xf;
-
     enum class Step { Continue, Finished, Stopped };
 
     Extractor<HitQueue, HitBatchPtr> hit_extractor;
     Extractor<TriggerQueue, TriggerBatchPtr> trigger_extractor;
     Injector<OutQueue, HitBatchPtr, Batch_Pool<HitBatch>, Hit> inj;
-
+    Camera& camera;
     uint64_t last_delay_time = 0;
     std::jthread m_thread;
 
@@ -69,7 +68,7 @@ class Delay {
             return Step::Continue;
 
         if (first_trigger) {
-            if (first_trigger.type() != kTriggerType) {
+            if (first_trigger.type() != camera.delay_trigger_type) {
                 trigger_extractor.pop();
                 std::cout << "TD";
                 return Step::Continue;
@@ -96,8 +95,11 @@ class Delay {
 
    public:
     Delay(HitQueue& hit, TriggerQueue& trigger, OutQueue& out,
-          Batch_Pool<HitBatch>& pool)
-        : hit_extractor(hit), trigger_extractor(trigger), inj(out, pool) {
+          Batch_Pool<HitBatch>& pool, Camera& camera)
+        : hit_extractor(hit),
+          trigger_extractor(trigger),
+          inj(out, pool),
+          camera(camera) {
         m_thread = std::jthread([this](std::stop_token stop) { run(stop); });
     }
 };

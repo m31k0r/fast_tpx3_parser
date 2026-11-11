@@ -1,18 +1,17 @@
 #pragma once
 
-#include <vector>
 #include <cstdint>
 #include <filesystem>
 #include <utility>
+#include <vector>
 
 #include "Rotation.hpp"
 
 constexpr auto NUM = 256;
 constexpr auto CH1_RISE = 0xF;
 class Camera {
-
-    std::pair<size_t,size_t> m_number_pixels_cam = {NUM, NUM};
-    std::pair<size_t,size_t> m_number_pixels = {2 * NUM, 2 * NUM};
+    std::pair<size_t, size_t> m_number_pixels_cam = {NUM, NUM};
+    std::pair<size_t, size_t> m_number_pixels = {2 * NUM, 2 * NUM};
     std::uint8_t m_number_of_chips = 4;
     std::vector<std::uint32_t> m_shift_x = {NUM, NUM, 0, 0};
     std::vector<std::uint32_t> m_shift_y = {NUM, 0, 0, NUM};
@@ -24,12 +23,14 @@ class Camera {
         std::vector<int64_t>(NUM, 0), std::vector<int64_t>(NUM, 0),
         std::vector<int64_t>(NUM, 0), std::vector<int64_t>(NUM, 0)};
     std::vector<uint8_t> m_gap_fill{0b0000, 0b0000, 0b0000, 0b0000};
-    uint16_t m_delay_trigger_type = CH1_RISE;
 
+   public:
+    uint16_t delay_trigger_type = CH1_RISE;
+    uint16_t diff_trigger_type = CH1_RISE;
 
-public:
-    std::pair<uint16_t, uint16_t> fill_gap(std::pair<uint16_t,uint16_t> pos_chip,
-                                                   uint8_t t_chip_nr) {
+   public:
+    std::pair<uint16_t, uint16_t> fill_gap(
+        std::pair<uint16_t, uint16_t> pos_chip, uint8_t t_chip_nr) {
         const auto gap = m_gap_fill.at(t_chip_nr);
         auto [x_rotated, y_rotated] =
             m_rotation[t_chip_nr].rotate(pos_chip.first, pos_chip.second);
@@ -55,15 +56,14 @@ public:
                 y_rotated += (rand() % 2);
             }
         }
-        return {
-            static_cast<uint16_t>(x_rotated),
-            static_cast<uint16_t>(y_rotated)
-        };
+        return {static_cast<uint16_t>(x_rotated),
+                static_cast<uint16_t>(y_rotated)};
     };
 
-    std::pair<uint16_t, uint16_t> to_global(std::pair<uint16_t, uint16_t> pos_chip,
-                                                    uint8_t t_chip_nr) {
-        return {pos_chip.first + m_shift_x[t_chip_nr], pos_chip.second + m_shift_y[t_chip_nr]};
+    std::pair<uint16_t, uint16_t> to_global(
+        std::pair<uint16_t, uint16_t> pos_chip, uint8_t t_chip_nr) {
+        return {pos_chip.first + m_shift_x[t_chip_nr],
+                pos_chip.second + m_shift_y[t_chip_nr]};
     }
 
     uint64_t get_row_correction(uint8_t t_chip_nr, uint16_t t_row) {

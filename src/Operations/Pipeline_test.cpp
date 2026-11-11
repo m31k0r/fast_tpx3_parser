@@ -37,7 +37,7 @@ struct TestTriggerWork {
         return output;
     }
 };
-}
+}  // namespace
 
 TEST_CASE("Extractor preserves EOF after buffered partial batches", "[EOF]") {
     Batch_Pool<HitBatch> pool(2);
@@ -60,7 +60,8 @@ TEST_CASE("Extractor preserves EOF after buffered partial batches", "[EOF]") {
     REQUIRE(extractor.eof());
 }
 
-TEST_CASE("Trigger merger waits for every input and preserves sequence", "[EOF]") {
+TEST_CASE("Trigger merger waits for every input and preserves sequence",
+          "[EOF]") {
     Batch_Pool<TriggerBatch> pool(3);
     auto queues =
         make_array<TriggerQueue>(std::make_index_sequence<3>{}, size_t{3});
@@ -89,14 +90,16 @@ TEST_CASE("Trigger merger waits for every input and preserves sequence", "[EOF]"
     REQUIRE_FALSE(merger.front());
 }
 
-TEST_CASE("Hit merger waits for all inputs and emits its final batch", "[EOF]") {
+TEST_CASE("Hit merger waits for all inputs and emits its final batch",
+          "[EOF]") {
     Batch_Pool<HitBatch> pool(8);
-    auto queues = make_array<HitQueue>(std::make_index_sequence<4>{}, size_t{3});
-    Merger merger(pool, make_array_l<Extractor<HitQueue, HitBatchPtr>>(
-                            std::make_index_sequence<4>{},
-                            [&queues](size_t i) {
-                                return Extractor<HitQueue, HitBatchPtr>(queues[i]);
-                            }));
+    auto queues =
+        make_array<HitQueue>(std::make_index_sequence<4>{}, size_t{3});
+    Merger merger(pool,
+                  make_array_l<Extractor<HitQueue, HitBatchPtr>>(
+                      std::make_index_sequence<4>{}, [&queues](size_t i) {
+                          return Extractor<HitQueue, HitBatchPtr>(queues[i]);
+                      }));
     auto hit = pool.acquire_batch_blocking();
     hit->push_back({10, 0, 0, 0});
     queues[0].push(std::move(hit));
@@ -126,11 +129,11 @@ TEST_CASE("Hit merger emits EOF after empty or exactly full input", "[EOF]") {
         Batch_Pool<HitBatch> pool(4);
         auto queues =
             make_array<HitQueue>(std::make_index_sequence<4>{}, size_t{2});
-        Merger merger(pool, make_array_l<Extractor<HitQueue, HitBatchPtr>>(
-                                std::make_index_sequence<4>{},
-                                [&queues](size_t i) {
-                                    return Extractor<HitQueue, HitBatchPtr>(queues[i]);
-                                }));
+        Merger merger(
+            pool, make_array_l<Extractor<HitQueue, HitBatchPtr>>(
+                      std::make_index_sequence<4>{}, [&queues](size_t i) {
+                          return Extractor<HitQueue, HitBatchPtr>(queues[i]);
+                      }));
         if (full) {
             auto batch = pool.acquire_batch_blocking();
             for (size_t i = 0; i < BATCH_SIZE; ++i) {
@@ -157,6 +160,7 @@ TEST_CASE("Delay flushes hits after trigger EOF and then emits EOF", "[EOF]") {
     HitQueue hits(2);
     TriggerQueue triggers(2);
     HitQueue output(2);
+    Camera camera_;
     auto hit = pool.acquire_batch_blocking();
     hit->push_back({100, 1, 2, 3});
     hit->push_back({200, 1, 2, 3});
@@ -167,7 +171,8 @@ TEST_CASE("Delay flushes hits after trigger EOF and then emits EOF", "[EOF]") {
     triggers.push(std::move(trigger));
     triggers.push(EndOfFile{});
     {
-        Delay<HitQueue, TriggerQueue, HitQueue> delay(hits, triggers, output, pool);
+        Delay<HitQueue, TriggerQueue, HitQueue> delay(hits, triggers, output,
+                                                      pool, camera_);
         auto* message = wait_front(output);
         REQUIRE(message);
         auto& batch = std::get<HitBatchPtr>(*message);
@@ -189,12 +194,14 @@ TEST_CASE("Delay processes hits without triggers", "[EOF]") {
     HitQueue hits(2);
     TriggerQueue triggers(1);
     HitQueue output(2);
+    Camera camera_;
     auto hit = pool.acquire_batch_blocking();
     hit->push_back({42, 0, 0, 0});
     hits.push(std::move(hit));
     hits.push(EndOfFile{});
     triggers.push(EndOfFile{});
-    Delay<HitQueue, TriggerQueue, HitQueue> delay(hits, triggers, output, pool);
+    Delay<HitQueue, TriggerQueue, HitQueue> delay(hits, triggers, output, pool,
+                                                  camera_);
     auto* message = wait_front(output);
     REQUIRE(message);
     REQUIRE(std::get<HitBatchPtr>(*message)->delay[0] == 42);
@@ -213,7 +220,7 @@ TEST_CASE("Sorter emits a retained full batch before EOF", "[EOF]") {
     HitQueue output(2);
     Camera camera;
     auto sorter = std::make_unique<Sort<RawQueue, HitQueue>>(input, output,
-                                                            hit_pool, camera);
+                                                             hit_pool, camera);
     auto raw = raw_pool.acquire_batch_blocking();
     for (size_t i = 0; i < BATCH_SIZE; ++i) raw->push_back(0);
     input.push(std::move(raw));
@@ -234,17 +241,21 @@ TEST_CASE("EOF travels through the complete pipeline", "[EOF]") {
     Batch_Pool<U64Batch> raw_pool(4);
     Batch_Pool<HitBatch> hit_pool(12);
     Batch_Pool<TriggerBatch> trigger_pool(2);
-    auto raw_hits = make_array<RawQueue>(std::make_index_sequence<4>{}, size_t{2});
-    auto sorted = make_array<HitQueue>(std::make_index_sequence<4>{}, size_t{2});
-    auto raw_triggers = make_array<RawQueue>(std::make_index_sequence<1>{}, size_t{2});
-    auto parsed = make_array<TriggerQueue>(std::make_index_sequence<1>{}, size_t{2});
+    auto raw_hits =
+        make_array<RawQueue>(std::make_index_sequence<4>{}, size_t{2});
+    auto sorted =
+        make_array<HitQueue>(std::make_index_sequence<4>{}, size_t{2});
+    auto raw_triggers =
+        make_array<RawQueue>(std::make_index_sequence<1>{}, size_t{2});
+    auto parsed =
+        make_array<TriggerQueue>(std::make_index_sequence<1>{}, size_t{2});
     HitQueue output(2);
     Camera camera;
-    Merger hit_merger(hit_pool, make_array_l<Extractor<HitQueue, HitBatchPtr>>(
-                                    std::make_index_sequence<4>{},
-                                    [&sorted](size_t i) {
-                                        return Extractor<HitQueue, HitBatchPtr>(sorted[i]);
-                                    }));
+    Merger hit_merger(
+        hit_pool, make_array_l<Extractor<HitQueue, HitBatchPtr>>(
+                      std::make_index_sequence<4>{}, [&sorted](size_t i) {
+                          return Extractor<HitQueue, HitBatchPtr>(sorted[i]);
+                      }));
     SPSCs2SPSC<TriggerQueue, 1, TriggerBatchPtr> trigger_merger(parsed);
     std::array<std::unique_ptr<Sort<RawQueue, HitQueue>>, 4> sorters;
     for (size_t i = 0; i < 4; ++i) {
@@ -266,7 +277,7 @@ TEST_CASE("EOF travels through the complete pipeline", "[EOF]") {
     Worker<TestTriggerWork, RawQueue, TriggerQueue> worker(
         TestTriggerWork{trigger_pool}, raw_triggers[0], parsed[0]);
     Delay<Merger, decltype(trigger_merger), HitQueue> delay(
-        hit_merger, trigger_merger, output, hit_pool);
+        hit_merger, trigger_merger, output, hit_pool, camera);
     auto* message = wait_front(output);
     REQUIRE(message);
     auto& batch = std::get<HitBatchPtr>(*message);

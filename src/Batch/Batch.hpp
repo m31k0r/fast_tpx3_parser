@@ -40,7 +40,7 @@ struct alignas(std::hardware_destructive_interference_size) TriggerBatch {
 };
 struct Hit {
     uint64_t toa;
-    uint64_t tot;
+    uint16_t tot;
     uint16_t x;
     uint16_t y;
     uint32_t delay = 0;
@@ -53,7 +53,7 @@ struct Hit {
 };
 struct alignas(std::hardware_destructive_interference_size) HitBatch {
     std::array<uint64_t, BATCH_SIZE> toa{};
-    std::array<uint64_t, BATCH_SIZE> tot{};
+    std::array<uint16_t, BATCH_SIZE> tot{};
     std::array<uint16_t, BATCH_SIZE> x{};
     std::array<uint16_t, BATCH_SIZE> y{};
 

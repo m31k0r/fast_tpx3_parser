@@ -37,25 +37,25 @@ class ParseHit {
         return {t_data, toa};
     }
 
-    HitBatchPtr parse(U64BatchPtr &batch) {
-        HitBatchPtr out_batch = batch_pool.acquire_batch_blocking();
-        out_batch->sequence_number = batch->sequence_number;
-        for (auto u64 : *batch) {
-            auto hit = tpx3_helper::Hit(u64);
-            auto [x_filled, y_filled] =
-                camera.fill_gap({hit.x, hit.y}, chip_nr);
-
-            auto [x, y] = camera.to_global({x_filled, y_filled}, chip_nr);
-
-            out_batch->toa[out_batch->size] = clock_correction_.clock(
-                hit.get_toa() + camera.get_row_correction(chip_nr, hit.x));
-            out_batch->tot[out_batch->size] = hit.tot;
-            out_batch->x[out_batch->size] = x;
-            out_batch->y[out_batch->size] = y;
-            out_batch->size++;
-        }
-        return out_batch;
-    }
+    // HitBatchPtr parse(U64BatchPtr &batch) {
+    //     HitBatchPtr out_batch = batch_pool.acquire_batch_blocking();
+    //     out_batch->sequence_number = batch->sequence_number;
+    //     for (auto u64 : *batch) {
+    //         auto hit = tpx3_helper::Hit(u64);
+    //         auto [x_filled, y_filled] =
+    //             camera.fill_gap({hit.x, hit.y}, chip_nr);
+    //
+    //         auto [x, y] = camera.to_global({x_filled, y_filled}, chip_nr);
+    //
+    //         out_batch->toa[out_batch->size] = clock_correction_.clock(
+    //             hit.get_toa() + camera.get_row_correction(chip_nr, hit.x));
+    //         out_batch->tot[out_batch->size] = hit.tot;
+    //         out_batch->x[out_batch->size] = x;
+    //         out_batch->y[out_batch->size] = y;
+    //         out_batch->size++;
+    //     }
+    //     return out_batch;
+    // }
 
     HitBatchPtr parse_no_toa(PreParsed *begin, PreParsed *end) {
         HitBatchPtr out_batch = batch_pool.acquire_batch_blocking();

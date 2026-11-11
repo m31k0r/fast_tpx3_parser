@@ -146,17 +146,15 @@ class Parser {
                               m_batch_handle.sorted_hit_queue[i]);
                       })};
 
-   public:
-    HitSPSC out_queue{QUEUE_SIZE};
-
-   private:
     Delay<Merger, TriggerMerger, HitSPSC> delay;
 
    public:
+    HitSPSC out_queue{QUEUE_SIZE};
+
     Parser()
         : header(m_batch_handle.pusher),
           delay(merger, trigger_out_queue, out_queue,
-                m_batch_handle.Hitbatch_pool) {
+                m_batch_handle.Hitbatch_pool, camera_) {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
         }

@@ -12,12 +12,14 @@ plt.title("delay")
 
 plt.figure()
 H, xedges, yedges = np.histogram2d(
-    data[:,1], data[:,2],
+    data[:,2], data[:,3],
     bins=[514, 514],
     range=[[0, 514], [0, 514]]
 )
-plt.imshow(H)
+plt.imshow(H, vmax=1)
 
+plt.figure()
+plt.hist(data[:,2], bins=1000)
 
 plt.show()
 

@@ -8,25 +8,25 @@ class HitIterator {
     HitBatch *batch;
     size_t idx;
 
-    [[nodiscard]] uint64_t get_toa() const {
+    [[nodiscard]] auto get_toa() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
         return batch->toa[idx];
     }
 
-    [[nodiscard]] uint64_t get_tot() const {
+    [[nodiscard]] auto get_tot() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
         return batch->tot[idx];
     }
 
-    [[nodiscard]] uint16_t get_x() const {
+    [[nodiscard]] auto get_x() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
         return batch->x[idx];
     }
 
-    [[nodiscard]] uint16_t get_y() const {
+    [[nodiscard]] auto get_y() const {
         DEBUG_ASSERT(batch);
         DEBUG_ASSERT(idx < BATCH_SIZE);
         return batch->y[idx];
@@ -37,10 +37,10 @@ class HitIterator {
 
     HitIterator(HitBatch *batch, size_t idx) : batch(batch), idx(idx) {}
 
-    uint64_t toa() const { return get_toa(); }
-    uint64_t tot() const { return get_tot(); }
-    uint16_t x() const { return get_x(); }
-    uint16_t y() const { return get_y(); }
+    auto toa() const { return get_toa(); }
+    auto tot() const { return get_tot(); }
+    auto x() const { return get_x(); }
+    auto y() const { return get_y(); }
 };
 class TriggerIterator {
     TriggerBatch *batch;
