@@ -16,7 +16,7 @@
 #include <thread>
 #include <vector>
 
-constexpr auto num_runs = 1;
+constexpr auto num_runs = 10;
 
 void printHistogram(const std::vector<double>& runtimes, int numBuckets = 10,
                     const std::string& unit = "ms") {
@@ -97,7 +97,8 @@ int main(int argc, char* argv[]) {
     const auto file_size_gb =
         std::distance(mmap.begin(), mmap.end()) * sizeof(uint64_t) * 1e-9;
     Parser<4> parser;
-    Exporter<HitSPSC, HitBatchPtr> exporter;
+    // Exporter<HitSPSC, HitBatchPtr> exporter;
+    Sink<HitSPSC, HitBatchPtr> exporter;
     exporter.start(parser.out_queue);
     for (int i = 0; i < num_runs; ++i) {
         const auto start = std::chrono::steady_clock::now();

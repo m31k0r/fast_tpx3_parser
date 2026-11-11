@@ -25,6 +25,7 @@ class Delay {
 
     // No hit available: drop a trailing trigger or finish once both ended.
     Step handle_missing_hit(const auto& first_trigger, std::stop_token stop) {
+        trigger_extractor.drain();
         if (not hit_extractor.eof()) return Step::Continue;
         if (first_trigger) {
             trigger_extractor.pop();
@@ -57,8 +58,8 @@ class Delay {
     }
 
     Step step(std::stop_token stop) {
-        hit_extractor.drain();
-        trigger_extractor.drain();
+        // hit_extractor.drain();
+        // trigger_extractor.drain();
         const auto first_trigger = trigger_extractor.front();
         const auto first_hit = hit_extractor.front();
 
@@ -80,7 +81,6 @@ class Delay {
             }
         }
         const auto result = emit_hit(first_hit, first_trigger, stop);
-        std::cout << std::flush;
         return result;
     }
 
