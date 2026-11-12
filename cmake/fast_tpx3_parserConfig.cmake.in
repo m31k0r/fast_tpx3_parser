@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(libassert CONFIG REQUIRED)
+
+include("${CMAKE_CURRENT_LIST_DIR}/fast_tpx3_parserTargets.cmake")
+check_required_components(fast_tpx3_parser)

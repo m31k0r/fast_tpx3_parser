@@ -10,10 +10,10 @@ standalone command-line application.
 - CMake 3.31 or newer
 - A C++26-capable compiler
 - Conan 2 and Ninja
-- The dependencies declared in [`conanfile.py`](conanfile.py): Catch2,
-  Google Benchmark, flux, and libassert (CMake also requires GTest)
+- libassert for the library; Catch2, Google Test, and Google Benchmark for the
+  optional tests and tools
 
-## Build and test
+## Build
 
 From the repository root:
 
@@ -29,12 +29,33 @@ cmake -S . -B build/debug \
   -G Ninja
 
 cmake --build build/debug
+```
+
+The project builds the `fast_tpx3_parser` library. Unit tests and the parser
+executable/benchmarks are enabled by default when building this repository;
+disable them when embedding the project with `-DBUILD_TESTING=OFF
+-DFAST_TPX3_PARSER_BUILD_TOOLS=OFF`.
+
+Run the unit tests with:
+
+```sh
 ctest --test-dir build/debug --output-on-failure
 ```
 
-The CMake project builds the `mylib` library, the `unit_tests` test executable,
-and the `benchmarks` executable. There is currently no configured application
-or CLI target.
+## Install and use from another CMake project
+
+Install the library and CMake package files:
+
+```sh
+cmake --install build/debug --prefix install
+```
+
+Then consume the exported target from another project:
+
+```cmake
+find_package(fast_tpx3_parser CONFIG REQUIRED)
+target_link_libraries(my_target PRIVATE fast_tpx3_parser::fast_tpx3_parser)
+```
 
 ## Benchmarks
 
