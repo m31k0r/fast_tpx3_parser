@@ -58,7 +58,6 @@ target_compile_options(fastTPX3 PUBLIC -mcx16
 
 target_link_libraries(fastTPX3
         PUBLIC
-        flux::flux
         atomic
         libassert::assert
 )
