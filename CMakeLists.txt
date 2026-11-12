@@ -14,16 +14,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Dependencies
 # ---------------------------------------------------------------------------
 
-find_package(GTest REQUIRED)
-find_package(benchmark REQUIRED)
-find_package(flux CONFIG REQUIRED)
 find_package(libassert REQUIRED)
 
 # ---------------------------------------------------------------------------
 # Library
 # ---------------------------------------------------------------------------
 
-add_library(mylib
+add_library(fastTPX3
         src/Parsing/Rotation.cpp
         src/Utility/Memory_Map.cpp
         src/Parsing/tpx3_helper.cpp
@@ -35,19 +32,19 @@ add_library(mylib
         src/Parsing/Camera.cpp
 )
 
-target_include_directories(mylib
+target_include_directories(fastTPX3
         PUBLIC
         ${PROJECT_SOURCE_DIR}/include
 )
-target_include_directories(mylib
+target_include_directories(fastTPX3
         PUBLIC
         ${PROJECT_SOURCE_DIR}/src
 )
 
-set_property(TARGET mylib PROPERTY COMPILE_WARNING_AS_ERROR ON)
+set_property(TARGET fastTPX3 PROPERTY COMPILE_WARNING_AS_ERROR ON)
 
-target_compile_features(mylib PUBLIC cxx_std_26)
-target_compile_options(mylib PUBLIC -mcx16
+target_compile_features(fastTPX3 PUBLIC cxx_std_26)
+target_compile_options(fastTPX3 PUBLIC -mcx16
         -march=native
         -Wno-interference-size
         -Wno-deprecated-declarations
@@ -59,7 +56,7 @@ target_compile_options(mylib PUBLIC -mcx16
 # add_compile_options(-fsanitize=address)
 # add_link_options(-fsanitize=address)
 
-target_link_libraries(mylib
+target_link_libraries(fastTPX3
         PUBLIC
         flux::flux
         atomic
@@ -69,12 +66,14 @@ target_link_libraries(mylib
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+option(ENABLE_TESTS "Enable tests" OFF)
+if(ENABLE_TESTS)
+  message(STATUS "Tests enabled")
+  enable_testing()
 
-enable_testing()
+  find_package(Catch2 3 REQUIRED)
 
-find_package(Catch2 3 REQUIRED)
-
-add_executable(unit_tests
+  add_executable(unit_tests
         src/Batch/Batch_Pool_test.cpp
         src/QueueUtility/Extractor_test.cpp
         src/QueueUtility/Injector_test.cpp
@@ -99,22 +98,27 @@ add_executable(unit_tests
         src/Operations/Pipeline_test.cpp
 )
 
-target_link_libraries(unit_tests
+  target_link_libraries(unit_tests
         PRIVATE
-        mylib
+        fastTPX3
         Catch2::Catch2WithMain
 )
 
-include(CTest)
-include(Catch)
+  include(CTest)
+  include(Catch)
 
-catch_discover_tests(unit_tests)
+  catch_discover_tests(unit_tests)
+
+endif()
 
 # ---------------------------------------------------------------------------
 # Benchmarks
 # ---------------------------------------------------------------------------
-
-add_executable(benchmarks
+option(ENABLE_BENCHMARKS "Enable benchmarks" OFF)
+if(ENABLE_BENCHMARKS)
+  find_package(benchmark REQUIRED)
+  message(STATUS "Benchmarks enabled")
+  add_executable(benchmarks
         benchmarks/benchmark.cpp
         src/Operations/Worker.hpp
         benchmarks/bm_clock_correction.cpp
@@ -124,17 +128,17 @@ add_executable(benchmarks
         benchmarks/bm_sink.cpp
 )
 
-target_link_libraries(benchmarks
+  target_link_libraries(benchmarks
         PRIVATE
-        mylib
+        fastTPX3
         benchmark::benchmark
 )
-
+endif()
 
 add_executable(main src/main.cpp)
 
 target_link_libraries(main
         PRIVATE
-        mylib
+        fastTPX3
         benchmark::benchmark
 )
