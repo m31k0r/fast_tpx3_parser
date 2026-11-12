@@ -65,13 +65,14 @@ class Delay {
 
         if (not first_hit) return handle_missing_hit(first_trigger, stop);
         // Wait until the next trigger is known or triggers have ended.
-        if (not first_trigger && not trigger_extractor.eof())
+        if (not first_trigger && not trigger_extractor.eof()) {
+            hit_extractor.drain();
             return Step::Continue;
+        }
 
         if (first_trigger) {
             if (first_trigger.type() != camera.delay_trigger_type) {
                 trigger_extractor.pop();
-                std::cout << "TD";
                 return Step::Continue;
             }
             if (first_hit.toa() > first_trigger.toa()) {

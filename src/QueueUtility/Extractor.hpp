@@ -82,7 +82,6 @@ class Extractor {
         }
         current_batch = nullptr;
         current_batch_obj = OwnedBatchPtr(nullptr);
-        return;
     }
 
    public:
