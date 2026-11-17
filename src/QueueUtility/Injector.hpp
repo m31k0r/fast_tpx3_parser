@@ -84,7 +84,6 @@ class Injector {
                 }
             }
         }
-        finished = true;
         return true;
     }
     bool try_push(T val);

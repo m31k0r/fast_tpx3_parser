@@ -47,3 +47,40 @@ TEST_CASE("Worker processes batches before stopping on EOF", "[Worker]") {
     REQUIRE(std::get<U64BatchPtr>(*input.front())->data[0] == 42);
     input.pop();
 }
+
+TEST_CASE("Worker forwards new-file boundaries and keeps processing",
+          "[Worker]") {
+    using Queue = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
+    Batch_Pool<U64Batch> pool(2);
+    Queue input(4);
+    Queue output(4);
+
+    auto first = pool.acquire_batch_blocking();
+    first->push_back(17);
+    input.push(std::move(first));
+    input.push(NewFile{"next.tpx3"});
+    auto second = pool.acquire_batch_blocking();
+    second->push_back(42);
+    input.push(std::move(second));
+    input.push(EndOfStream{});
+
+    {
+        Worker<IdentityWork, Queue, Queue> worker(IdentityWork{}, input,
+                                                  output);
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (output.size() != 4 &&
+               std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::yield();
+        }
+        REQUIRE(output.size() == 4);
+    }
+
+    REQUIRE(std::get<U64BatchPtr>(*output.front())->data[0] == 17);
+    output.pop();
+    REQUIRE(std::get<NewFile>(*output.front()).filename == "next.tpx3");
+    output.pop();
+    REQUIRE(std::get<U64BatchPtr>(*output.front())->data[0] == 42);
+    output.pop();
+    REQUIRE(std::holds_alternative<EndOfStream>(*output.front()));
+}
