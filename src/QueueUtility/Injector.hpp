@@ -49,19 +49,36 @@ class Injector {
     };
     bool finish(std::stop_token stop = {}) {
         if (finished) return true;
+        flush();
         adaptive_backoff backoff;
-        while (current_batch && not inject()) {
-            if (stop.stop_requested()) return false;
-            backoff.pause();
-        }
-        if constexpr (InQueueable<OutQueue, EndOfFile>) {
-            while (not queue.try_push(EndOfFile{})) {
+        if constexpr (InQueueable<OutQueue, EndOfStream>) {
+            while (not queue.try_push(EndOfStream{})) {
                 if (stop.stop_requested()) return false;
                 backoff.pause();
             }
         } else {
             for (auto &q : queue) {
-                while (not q.try_push(EndOfFile{})) {
+                while (not q.try_push(EndOfStream{})) {
+                    if (stop.stop_requested()) return false;
+                    backoff.pause();
+                }
+            }
+        }
+        finished = true;
+        return true;
+    }
+    bool new_file(std::string file_name, std::stop_token stop = {}) {
+        if (finished) return true;
+        flush();
+        adaptive_backoff backoff;
+        if constexpr (InQueueable<OutQueue, EndOfStream>) {
+            while (not queue.try_push(NewFile{file_name})) {
+                if (stop.stop_requested()) return false;
+                backoff.pause();
+            }
+        } else {
+            for (auto &q : queue) {
+                while (not q.try_push(NewFile{file_name})) {
                     if (stop.stop_requested()) return false;
                     backoff.pause();
                 }

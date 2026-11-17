@@ -28,14 +28,14 @@ class SPSCs2SPSC {
         for (size_t i = 0; i < N; ++i) {
             if (not ended[i]) {
                 auto* message = in[i].front();
-                if (message && std::holds_alternative<EndOfFile>(*message)) {
+                if (message && std::holds_alternative<EndOfStream>(*message)) {
                     in[i].pop();
                     ended[i] = true;
                 }
             }
         }
         if (std::all_of(ended.begin(), ended.end(), [](bool e) { return e; })) {
-            current.emplace(EndOfFile{});
+            current.emplace(EndOfStream{});
             eof_emitted = true;
             return &*current;
         }
@@ -44,7 +44,7 @@ class SPSCs2SPSC {
         if (ended[index]) {
             for (size_t i = 0; i < N; ++i) {
                 auto* message = in[i].front();
-                ASSERT(not message || std::holds_alternative<EndOfFile>(*message),
+                ASSERT(not message || std::holds_alternative<EndOfStream>(*message),
                        "Missing trigger batch sequence");
             }
             return nullptr;

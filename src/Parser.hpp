@@ -40,13 +40,13 @@ struct Pusher {
     size_t T_event = 0;
 
     void insert_hit(uint64_t data, uint8_t t_chip_nr) {
-        DEBUG_ASSERT(t_chip_nr < 4);
+        /*DEBUG_ASSERT(t_chip_nr < 4);
         adaptive_backoff backoff;
         while (not hit_inj[t_chip_nr].try_push(data)) {
             backoff.pause();
             H_backoff++;
         }
-        H_event++;
+        H_event++;*/
     }
     void insert_trigger(uint64_t data) {
         adaptive_backoff backoff;
@@ -166,6 +166,12 @@ class Parser {
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,
                               [](auto& inj) { inj.flush(); });
         m_batch_handle.pusher.trigger_inj.flush();
+    }
+    void new_file(std::string file_name) {
+        flush();
+        std::ranges::for_each(m_batch_handle.pusher.hit_inj,
+                      [file_name](auto& inj) { inj.new_file(file_name); });
+        m_batch_handle.pusher.trigger_inj.new_file(file_name);
     }
     void finish() {
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,

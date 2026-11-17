@@ -12,19 +12,20 @@
 #include "QueueUtility/Injector.hpp"
 #include "Utility/AdaptivBackoff.hpp"
 
-template <typename HitQueue, typename TriggerQueue, typename OutQueue>
+template<typename HitQueue, typename TriggerQueue, typename OutQueue>
 class Delay {
     enum class Step { Continue, Finished, Stopped };
 
     Extractor<HitQueue, HitBatchPtr> hit_extractor;
     Extractor<TriggerQueue, TriggerBatchPtr> trigger_extractor;
     Injector<OutQueue, HitBatchPtr, Batch_Pool<HitBatch>, Hit> inj;
-    Camera& camera;
+    Camera &camera;
     uint64_t last_delay_time = 0;
+    uint64_t diff_time = 0;
     std::jthread m_thread;
 
     // No hit available: drop a trailing trigger or finish once both ended.
-    Step handle_missing_hit(const auto& first_trigger, std::stop_token stop) {
+    Step handle_missing_hit(const auto &first_trigger, std::stop_token stop) {
         trigger_extractor.drain();
         if (not hit_extractor.eof()) return Step::Continue;
         if (first_trigger) {
@@ -38,17 +39,17 @@ class Delay {
 
     // Hit lies between the previous trigger (last_delay_time) and the next
     // one; trigger_diff is the interval between them, 0 if there is no next.
-    Step emit_hit(const auto& hit, const auto& next_trigger,
+    Step emit_hit(const auto &hit,
                   std::stop_token stop) {
         adaptive_backoff backoff;
-        const uint64_t trigger_diff =
-            next_trigger ? next_trigger.toa() - last_delay_time : 0;
-        const Hit out{hit.toa(),
-                      hit.tot(),
-                      hit.x(),
-                      hit.y(),
-                      static_cast<uint32_t>(hit.toa() - last_delay_time),
-                      static_cast<uint32_t>(trigger_diff)};
+        const Hit out{
+            hit.toa(),
+            hit.tot(),
+            hit.x(),
+            hit.y(),
+            static_cast<uint32_t>(last_delay_time==0 ? 0:hit.toa() - last_delay_time),
+            static_cast<uint32_t>(diff_time)
+        };
         while (not inj.try_push(out)) {
             backoff.pause();
             if (stop.stop_requested()) return Step::Stopped;
@@ -70,19 +71,28 @@ class Delay {
             return Step::Continue;
         }
 
-        if (first_trigger) {
+        if (not trigger_extractor.eof()) {
+            DEBUG_ASSERT(first_trigger);
+            if (first_trigger.type() == camera.diff_trigger_type) {
+                DEBUG_ASSERT(diff_time==0);
+                diff_time = first_trigger.toa() - last_delay_time;
+                trigger_extractor.pop();
+                return Step::Continue;
+            }
             if (first_trigger.type() != camera.delay_trigger_type) {
                 trigger_extractor.pop();
                 return Step::Continue;
             }
             if (first_hit.toa() > first_trigger.toa()) {
                 last_delay_time = first_trigger.toa();
+                diff_time = 0;
                 trigger_extractor.pop();
                 return Step::Continue;
             }
         }
-        const auto result = emit_hit(first_hit, first_trigger, stop);
-        return result;
+        std::cout<<std::flush;
+            const auto result = emit_hit(first_hit, stop);
+            return result;
     }
 
     void run(std::stop_token stop) {
@@ -94,9 +104,9 @@ class Delay {
         std::cout << "Trigger left: " << trigger_extractor.size() << std::endl;
     }
 
-   public:
-    Delay(HitQueue& hit, TriggerQueue& trigger, OutQueue& out,
-          Batch_Pool<HitBatch>& pool, Camera& camera)
+public:
+    Delay(HitQueue &hit, TriggerQueue &trigger, OutQueue &out,
+          Batch_Pool<HitBatch> &pool, Camera &camera)
         : hit_extractor(hit),
           trigger_extractor(trigger),
           inj(out, pool),

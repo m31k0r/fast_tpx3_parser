@@ -35,7 +35,7 @@ class Exporter {
     bool operator()(Queue& queue) {
         if constexpr (SCQueueable<Queue, QueueMessage<BatchPtr>>) {
             if (auto* message = queue.front()) {
-                if (std::holds_alternative<EndOfFile>(*message)) {
+                if (std::holds_alternative<EndOfStream>(*message)) {
                     queue.pop();
                     return true;
                 }

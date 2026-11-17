@@ -21,7 +21,7 @@ TEST_CASE("Worker processes batches before stopping on EOF", "[Worker]") {
     auto first = pool.acquire_batch_blocking();
     first->push_back(17);
     input.push(std::move(first));
-    input.push(EndOfFile{});
+    input.push(EndOfStream{});
     auto after_eof = pool.acquire_batch_blocking();
     after_eof->push_back(42);
     input.push(std::move(after_eof));
@@ -41,7 +41,7 @@ TEST_CASE("Worker processes batches before stopping on EOF", "[Worker]") {
 
     REQUIRE(std::get<U64BatchPtr>(*output.front())->data[0] == 17);
     output.pop();
-    REQUIRE(std::holds_alternative<EndOfFile>(*output.front()));
+    REQUIRE(std::holds_alternative<EndOfStream>(*output.front()));
     output.pop();
     REQUIRE(input.front());
     REQUIRE(std::get<U64BatchPtr>(*input.front())->data[0] == 42);

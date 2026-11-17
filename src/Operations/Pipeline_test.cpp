@@ -49,7 +49,7 @@ TEST_CASE("Extractor preserves EOF after buffered partial batches", "[EOF]") {
     auto second = pool.acquire_batch_blocking();
     second->push_back({20, 0, 0, 0});
     queue.push(std::move(second));
-    queue.push(EndOfFile{});
+    queue.push(EndOfStream{});
     extractor.drain();
     REQUIRE(extractor.front().toa() == 10);
     extractor.pop();
@@ -70,8 +70,8 @@ TEST_CASE("Trigger merger waits for every input and preserves sequence",
     first->sequence_number = 0;
     first->push_back(10, 15);
     queues[0].push(std::move(first));
-    queues[0].push(EndOfFile{});
-    queues[2].push(EndOfFile{});
+    queues[0].push(EndOfStream{});
+    queues[2].push(EndOfStream{});
     REQUIRE(merger.front());
     REQUIRE(std::get<TriggerBatchPtr>(*merger.front())->toa[0] == 10);
     merger.pop();
@@ -80,12 +80,12 @@ TEST_CASE("Trigger merger waits for every input and preserves sequence",
     second->sequence_number = 1;
     second->push_back(20, 15);
     queues[1].push(std::move(second));
-    queues[1].push(EndOfFile{});
+    queues[1].push(EndOfStream{});
     REQUIRE(merger.front());
     REQUIRE(std::get<TriggerBatchPtr>(*merger.front())->toa[0] == 20);
     merger.pop();
     REQUIRE(merger.front());
-    REQUIRE(std::holds_alternative<EndOfFile>(*merger.front()));
+    REQUIRE(std::holds_alternative<EndOfStream>(*merger.front()));
     merger.pop();
     REQUIRE_FALSE(merger.front());
 }
@@ -103,14 +103,14 @@ TEST_CASE("Hit merger waits for all inputs and emits its final batch",
     auto hit = pool.acquire_batch_blocking();
     hit->push_back({10, 0, 0, 0});
     queues[0].push(std::move(hit));
-    queues[0].push(EndOfFile{});
-    queues[1].push(EndOfFile{});
-    queues[2].push(EndOfFile{});
+    queues[0].push(EndOfStream{});
+    queues[1].push(EndOfStream{});
+    queues[2].push(EndOfStream{});
     REQUIRE_FALSE(merger.front());
     auto later = pool.acquire_batch_blocking();
     later->push_back({20, 0, 0, 0});
     queues[3].push(std::move(later));
-    queues[3].push(EndOfFile{});
+    queues[3].push(EndOfStream{});
     auto* message = merger.front();
     REQUIRE(message);
     auto& batch = std::get<HitBatchPtr>(*message);
@@ -119,7 +119,7 @@ TEST_CASE("Hit merger waits for all inputs and emits its final batch",
     REQUIRE(batch->toa[1] == 20);
     merger.pop();
     REQUIRE(merger.front());
-    REQUIRE(std::holds_alternative<EndOfFile>(*merger.front()));
+    REQUIRE(std::holds_alternative<EndOfStream>(*merger.front()));
     merger.pop();
     REQUIRE_FALSE(merger.front());
 }
@@ -141,14 +141,14 @@ TEST_CASE("Hit merger emits EOF after empty or exactly full input", "[EOF]") {
             }
             queues[0].push(std::move(batch));
         }
-        for (auto& queue : queues) queue.push(EndOfFile{});
+        for (auto& queue : queues) queue.push(EndOfStream{});
         if (full) {
             REQUIRE(merger.front());
             REQUIRE(std::get<HitBatchPtr>(*merger.front())->size == BATCH_SIZE);
             merger.pop();
         }
         REQUIRE(merger.front());
-        REQUIRE(std::holds_alternative<EndOfFile>(*merger.front()));
+        REQUIRE(std::holds_alternative<EndOfStream>(*merger.front()));
         merger.pop();
         REQUIRE_FALSE(merger.front());
     }
@@ -165,11 +165,11 @@ TEST_CASE("Delay flushes hits after trigger EOF and then emits EOF", "[EOF]") {
     hit->push_back({100, 1, 2, 3});
     hit->push_back({200, 1, 2, 3});
     hits.push(std::move(hit));
-    hits.push(EndOfFile{});
+    hits.push(EndOfStream{});
     auto trigger = trigger_pool.acquire_batch_blocking();
     trigger->push_back(50, 15);
     triggers.push(std::move(trigger));
-    triggers.push(EndOfFile{});
+    triggers.push(EndOfStream{});
     {
         Delay<HitQueue, TriggerQueue, HitQueue> delay(hits, triggers, output,
                                                       pool, camera_);
@@ -184,7 +184,7 @@ TEST_CASE("Delay flushes hits after trigger EOF and then emits EOF", "[EOF]") {
         output.pop();
         message = wait_front(output);
         REQUIRE(message);
-        REQUIRE(std::holds_alternative<EndOfFile>(*message));
+        REQUIRE(std::holds_alternative<EndOfStream>(*message));
         output.pop();
     }
 }
@@ -198,17 +198,17 @@ TEST_CASE("Delay processes hits without triggers", "[EOF]") {
     auto hit = pool.acquire_batch_blocking();
     hit->push_back({42, 0, 0, 0});
     hits.push(std::move(hit));
-    hits.push(EndOfFile{});
-    triggers.push(EndOfFile{});
+    hits.push(EndOfStream{});
+    triggers.push(EndOfStream{});
     Delay<HitQueue, TriggerQueue, HitQueue> delay(hits, triggers, output, pool,
                                                   camera_);
     auto* message = wait_front(output);
     REQUIRE(message);
-    REQUIRE(std::get<HitBatchPtr>(*message)->delay[0] == 42);
+    REQUIRE(std::get<HitBatchPtr>(*message)->delay[0] == 0);
     output.pop();
     message = wait_front(output);
     REQUIRE(message);
-    REQUIRE(std::holds_alternative<EndOfFile>(*message));
+    REQUIRE(std::holds_alternative<EndOfStream>(*message));
     output.pop();
 }
 
@@ -224,7 +224,7 @@ TEST_CASE("Sorter emits a retained full batch before EOF", "[EOF]") {
     auto raw = raw_pool.acquire_batch_blocking();
     for (size_t i = 0; i < BATCH_SIZE; ++i) raw->push_back(0);
     input.push(std::move(raw));
-    input.push(EndOfFile{});
+    input.push(EndOfStream{});
     sorter->start_worker();
     auto* message = wait_front(output);
     REQUIRE(message);
@@ -232,7 +232,7 @@ TEST_CASE("Sorter emits a retained full batch before EOF", "[EOF]") {
     output.pop();
     message = wait_front(output);
     REQUIRE(message);
-    REQUIRE(std::holds_alternative<EndOfFile>(*message));
+    REQUIRE(std::holds_alternative<EndOfStream>(*message));
     output.pop();
 }
 
@@ -266,14 +266,14 @@ TEST_CASE("EOF travels through the complete pipeline", "[EOF]") {
             batch->push_back(i + 1);
             raw_hits[i].push(std::move(batch));
         }
-        raw_hits[i].push(EndOfFile{});
+        raw_hits[i].push(EndOfStream{});
         sorters[i]->start_worker();
     }
     auto trigger = raw_pool.acquire_batch_blocking();
     trigger->sequence_number = 0;
     trigger->push_back(0);
     raw_triggers[0].push(std::move(trigger));
-    raw_triggers[0].push(EndOfFile{});
+    raw_triggers[0].push(EndOfStream{});
     Worker<TestTriggerWork, RawQueue, TriggerQueue> worker(
         TestTriggerWork{trigger_pool}, raw_triggers[0], parsed[0]);
     Delay<Merger, decltype(trigger_merger), HitQueue> delay(
@@ -286,6 +286,6 @@ TEST_CASE("EOF travels through the complete pipeline", "[EOF]") {
     output.pop();
     message = wait_front(output);
     REQUIRE(message);
-    REQUIRE(std::holds_alternative<EndOfFile>(*message));
+    REQUIRE(std::holds_alternative<EndOfStream>(*message));
     output.pop();
 }

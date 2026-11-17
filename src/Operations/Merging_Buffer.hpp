@@ -60,7 +60,7 @@ class Merger {
                     return &*current;
                 }
                 current_batch.reset();
-                current.emplace(EndOfFile{});
+                current.emplace(EndOfStream{});
                 eof_emitted = true;
                 return &*current;
             }

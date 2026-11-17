@@ -9,6 +9,7 @@
 
 constexpr auto NUM = 256;
 constexpr auto CH1_RISE = 0xF;
+constexpr auto CH2_FALL = 0xb;
 class Camera {
     std::pair<size_t, size_t> m_number_pixels_cam = {NUM, NUM};
     std::pair<size_t, size_t> m_number_pixels = {2 * NUM, 2 * NUM};
@@ -26,7 +27,7 @@ class Camera {
 
    public:
     uint16_t delay_trigger_type = CH1_RISE;
-    uint16_t diff_trigger_type = CH1_RISE;
+    uint16_t diff_trigger_type = CH2_FALL;
 
    public:
     std::pair<uint16_t, uint16_t> fill_gap(

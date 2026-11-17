@@ -23,14 +23,22 @@ class Worker {
                 if (in.front()) {
                     auto message = std::move(*in.front());
                     in.pop();
-                    if (std::holds_alternative<EndOfFile>(message)) {
+                    if (std::holds_alternative<EndOfStream>(message)) {
                         adaptive_backoff backoff;
-                        while (not out.try_push(EndOfFile{})) {
+                        while (not out.try_push(EndOfStream{})) {
                             backoff.pause();
                             if (stop_token.stop_requested()) return;
                         }
                         return;
                     }
+                    if (std::holds_alternative<NewFile>(message)) {
+                       adaptive_backoff backoff;
+                       while (not out.try_push(std::get<NewFile>(message))) {
+                           backoff.pause();
+                           if (stop_token.stop_requested()) return;
+                       }
+                       return;
+                   }
                     ba = std::move(std::get<U64BatchPtr>(message));
                 }
                 if (ba) {

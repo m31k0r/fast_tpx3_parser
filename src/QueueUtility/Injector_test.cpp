@@ -67,7 +67,7 @@ TEST_CASE("Injector sends batches before EOF", "[Injector]") {
     REQUIRE(partial->sequence_number == 1);
     queue.pop();
     REQUIRE(queue.front());
-    REQUIRE(std::holds_alternative<EndOfFile>(*queue.front()));
+    REQUIRE(std::holds_alternative<EndOfStream>(*queue.front()));
     queue.pop();
     REQUIRE_FALSE(queue.front());
 }
@@ -88,7 +88,7 @@ TEST_CASE("Injector broadcasts EOF to every queue", "[Injector]") {
     queues[0].pop();
     for (auto &queue : queues) {
         REQUIRE(queue.front());
-        REQUIRE(std::holds_alternative<EndOfFile>(*queue.front()));
+        REQUIRE(std::holds_alternative<EndOfStream>(*queue.front()));
         queue.pop();
         REQUIRE_FALSE(queue.front());
     }

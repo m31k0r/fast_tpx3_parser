@@ -13,7 +13,7 @@ TEST_CASE("Sink consumes a batch and recognizes EOF messages") {
     queue.push(std::move(batch));
     REQUIRE_FALSE(sink(queue));
     REQUIRE(queue.size() == 0);
-    queue.push(EndOfFile{});
+    queue.push(EndOfStream{});
     REQUIRE(sink(queue));
     REQUIRE(queue.size() == 0);
 }
