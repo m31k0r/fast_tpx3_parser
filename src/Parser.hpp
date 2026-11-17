@@ -40,13 +40,13 @@ struct Pusher {
     size_t T_event = 0;
 
     void insert_hit(uint64_t data, uint8_t t_chip_nr) {
-        /*DEBUG_ASSERT(t_chip_nr < 4);
+        DEBUG_ASSERT(t_chip_nr < 4);
         adaptive_backoff backoff;
         while (not hit_inj[t_chip_nr].try_push(data)) {
             backoff.pause();
             H_backoff++;
         }
-        H_event++;*/
+        H_event++;
     }
     void insert_trigger(uint64_t data) {
         adaptive_backoff backoff;

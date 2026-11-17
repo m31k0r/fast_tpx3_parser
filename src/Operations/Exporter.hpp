@@ -9,6 +9,7 @@
 #include "QueueUtility/QueueMessage.hpp"
 #include "Utility/AdaptivBackoff.hpp"
 
+#define MAX_EXPORT 1000
 template <typename Queue, typename BatchPtr>
 class Exporter {
     size_t counter_batch = 0;
@@ -16,6 +17,9 @@ class Exporter {
     std::jthread m_thread;
     bool received_flush = false;
     std::ofstream outfile;
+
+    size_t cut_counter = 0;
+
 
     void consume(const BatchPtr& batch) {
         ++counter_batch;
@@ -26,6 +30,8 @@ class Exporter {
             received_flush = false;
         }
         for (size_t i = 0; i < batch->size; ++i) {
+            cut_counter++;
+            if (cut_counter<MAX_EXPORT)
             outfile << batch->operator[](i) << "\n";
         }
     }
@@ -38,6 +44,10 @@ class Exporter {
                 if (std::holds_alternative<EndOfStream>(*message)) {
                     queue.pop();
                     return true;
+                }
+                if (std::holds_alternative<NewFile>(*message)) {
+                    outfile << std::get<NewFile>(*message).filename << "\n";
+                    cut_counter=0;
                 }
                 if (std::holds_alternative<BatchPtr>(*message))
                     consume(std::get<BatchPtr>(*message));
