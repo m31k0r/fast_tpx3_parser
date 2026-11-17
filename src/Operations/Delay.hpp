@@ -24,15 +24,38 @@ class Delay {
     uint64_t diff_time = 0;
     std::jthread m_thread;
 
-    // No hit available: drop a trailing trigger or finish once both ended.
-    Step handle_missing_hit(const auto &first_trigger, std::stop_token stop) {
-        trigger_extractor.drain();
-        if (not hit_extractor.eof()) return Step::Continue;
-        if (first_trigger) {
-            trigger_extractor.pop();
-        } else if (trigger_extractor.eof()) {
+    bool at_boundary(const auto& extractor) const {
+        return extractor.eof() || extractor.new_file();
+    }
+
+    Step finish_boundary(std::stop_token stop) {
+        ASSERT(hit_extractor.eof() == trigger_extractor.eof(),
+               "Mismatched hit and trigger stream boundaries");
+        if (hit_extractor.eof() && trigger_extractor.eof()) {
             inj.finish(stop);
             return Step::Finished;
+        }
+        if (hit_extractor.new_file() && trigger_extractor.new_file()) {
+            ASSERT(hit_extractor.file_message().filename ==
+                       trigger_extractor.file_message().filename,
+                   "Mismatched hit and trigger files");
+            inj.new_file(hit_extractor.file_message().filename, stop);
+            hit_extractor.consume_new_file();
+            trigger_extractor.consume_new_file();
+            last_delay_time = 0;
+            diff_time = 0;
+        }
+        return Step::Continue;
+    }
+
+    // No hit available: drop trailing triggers or finish at a shared boundary.
+    Step handle_missing_hit(const auto &first_trigger, std::stop_token stop) {
+        trigger_extractor.drain();
+        if (not at_boundary(hit_extractor)) return Step::Continue;
+        if (first_trigger) {
+            trigger_extractor.pop();
+        } else if (at_boundary(trigger_extractor)) {
+            return finish_boundary(stop);
         }
         return Step::Continue;
     }
@@ -66,12 +89,12 @@ class Delay {
 
         if (not first_hit) return handle_missing_hit(first_trigger, stop);
         // Wait until the next trigger is known or triggers have ended.
-        if (not first_trigger && not trigger_extractor.eof()) {
+        if (not first_trigger && not at_boundary(trigger_extractor)) {
             hit_extractor.drain();
             return Step::Continue;
         }
 
-        if (not trigger_extractor.eof()) {
+        if (not at_boundary(trigger_extractor)) {
             DEBUG_ASSERT(first_trigger);
             if (first_trigger.type() == camera.diff_trigger_type) {
                 DEBUG_ASSERT(diff_time==0);

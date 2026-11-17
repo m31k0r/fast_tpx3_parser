@@ -93,3 +93,28 @@ TEST_CASE("Injector broadcasts EOF to every queue", "[Injector]") {
         REQUIRE_FALSE(queue.front());
     }
 }
+
+TEST_CASE("Injector resumes after a new-file boundary", "[Injector]") {
+    using MessageQueue = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
+    Batch_Pool<U64Batch> pool(3);
+    MessageQueue queue(5);
+    Injector<MessageQueue, U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>
+        injector(queue, pool);
+
+    REQUIRE(injector.try_push(17));
+    REQUIRE(injector.new_file("next.tpx3"));
+    REQUIRE(injector.try_push(29));
+    REQUIRE(injector.finish());
+
+    REQUIRE(std::holds_alternative<U64BatchPtr>(*queue.front()));
+    REQUIRE(std::get<U64BatchPtr>(*queue.front())->data[0] == 17);
+    queue.pop();
+    REQUIRE(std::holds_alternative<NewFile>(*queue.front()));
+    REQUIRE(std::get<NewFile>(*queue.front()).filename == "next.tpx3");
+    queue.pop();
+    REQUIRE(std::holds_alternative<U64BatchPtr>(*queue.front()));
+    REQUIRE(std::get<U64BatchPtr>(*queue.front())->data[0] == 29);
+    REQUIRE(std::get<U64BatchPtr>(*queue.front())->sequence_number == 1);
+    queue.pop();
+    REQUIRE(std::holds_alternative<EndOfStream>(*queue.front()));
+}

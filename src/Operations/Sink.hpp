@@ -34,7 +34,8 @@ class Sink {
                     queue.pop();
                     return true;
                 }
-                consume(std::get<BatchPtr>(*message));
+                if (std::holds_alternative<BatchPtr>(*message))
+                    consume(std::get<BatchPtr>(*message));
                 queue.pop();
             }
         } else {

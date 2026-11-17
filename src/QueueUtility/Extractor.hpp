@@ -28,52 +28,83 @@ class Extractor {
     size_t read_idx = 0;
 
     VariantPtr current_batch_obj;
-    Batch *current_batch;
+    Batch *current_batch = nullptr;
 
     std::deque<QueueMessage<OwnedBatchPtr>> overflow;
-    bool flush_queued = false;
+    bool control_queued = false;
+    bool eof_reached = false;
+    bool new_file_reached = false;
+
+    void load_message(QueueMessage<OwnedBatchPtr> message) {
+        if (std::holds_alternative<EndOfStream>(message)) {
+            eof_reached = true;
+            current_batch = nullptr;
+            current_batch_obj = EndOfStream{};
+        } else if (std::holds_alternative<NewFile>(message)) {
+            new_file_reached = true;
+            current_batch = nullptr;
+            current_batch_obj = std::get<NewFile>(std::move(message));
+        } else {
+            read_idx = 0;
+            current_batch = std::get<OwnedBatchPtr>(message).get();
+            current_batch_obj = std::move(std::get<OwnedBatchPtr>(message));
+        }
+    }
+
     void copy_front() {
-        auto *queued = queue.front();
+        if constexpr (SCQueueable<InQueue, QueueMessage<BatchPtr>>) {
+            auto *queued = queue.front();
             if (std::holds_alternative<EndOfStream>(*queued)) {
                 overflow.emplace_back(EndOfStream{});
-                flush_queued = true;
+                control_queued = true;
             } else if (std::holds_alternative<NewFile>(*queued)) {
                 overflow.emplace_back(std::get<NewFile>(*queued));
-                flush_queued = true;
-            }else{
-                overflow.emplace_back(
-                    std::make_unique<Batch>(*std::get<BatchPtr>(*queued)));
+                control_queued = true;
+            } else {
+                overflow.emplace_back(std::make_unique<Batch>(
+                    *std::get<BatchPtr>(*queued)));
             }
-
+        } else {
+            overflow.emplace_back(
+                std::make_unique<Batch>(*(*queue.front())));
+        }
         queue.pop();
     }
 
     void load_next_batch() {
-        if (overflow.empty() &&  queue.front()) {
-            QueueMessage<BatchPtr> message = std::move(*queue.front());
-            queue.pop();
-            if (std::holds_alternative<EndOfStream>(message)) {
-                current_batch = nullptr;
-                current_batch_obj = EndOfStream{};
-                return;
+        current_batch = nullptr;
+        if (eof_reached || new_file_reached) return;
+        if (overflow.empty() && queue.front()) {
+            if constexpr (SCQueueable<InQueue, QueueMessage<BatchPtr>>) {
+                QueueMessage<BatchPtr> message = std::move(*queue.front());
+                queue.pop();
+                if (std::holds_alternative<EndOfStream>(message)) {
+                    load_message(EndOfStream{});
+                    return;
+                }
+                if (std::holds_alternative<NewFile>(message)) {
+                    load_message(std::get<NewFile>(std::move(message)));
+                    return;
+                }
+                read_idx = 0;
+                current_batch = std::get<BatchPtr>(message).get();
+                current_batch_obj = std::move(std::get<BatchPtr>(message));
+            } else {
+                read_idx = 0;
+                current_batch = queue.front()->get();
+                current_batch_obj = std::move(*queue.front());
+                queue.pop();
             }
-            read_idx = 0;
-            current_batch = std::get<BatchPtr>(message).get();
-            current_batch_obj = std::move(std::get<BatchPtr>(message));
             return;
         }
-        // if (overflow.empty() && not ended && queue.front()) copy_front();
         if (not overflow.empty()) {
             QueueMessage<OwnedBatchPtr> message = std::move(overflow.front());
             overflow.pop_front();
-            if (std::holds_alternative<EndOfStream>(message)) {
-                current_batch_obj = EndOfStream{};
-                current_batch = nullptr;
-                return;
+            if (std::holds_alternative<EndOfStream>(message) ||
+                std::holds_alternative<NewFile>(message)) {
+                control_queued = false;
             }
-            read_idx = 0;
-            current_batch = std::get<OwnedBatchPtr>(message).get();
-            current_batch_obj = std::move(std::get<OwnedBatchPtr>(message));
+            load_message(std::move(message));
             return;
         }
         current_batch = nullptr;
@@ -100,9 +131,24 @@ class Extractor {
     };
 
     void drain() {
-        while (queue.front()) {
+        while (queue.front() && not control_queued && not eof_reached &&
+               not new_file_reached) {
             copy_front();
         }
     }
+
+    bool eof() const { return eof_reached; }
+    bool new_file() const { return new_file_reached; }
+    const NewFile &file_message() const {
+        DEBUG_ASSERT(new_file_reached);
+        return std::get<NewFile>(current_batch_obj);
+    }
+
+    void consume_new_file() {
+        DEBUG_ASSERT(new_file_reached);
+        new_file_reached = false;
+        current_batch_obj = OwnedBatchPtr(nullptr);
+    }
+
     size_t size() { return queue.size() + overflow.size(); }
 };

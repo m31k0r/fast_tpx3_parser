@@ -60,6 +60,29 @@ TEST_CASE("Extractor preserves EOF after buffered partial batches", "[EOF]") {
     REQUIRE(extractor.eof());
 }
 
+TEST_CASE("Extractor preserves file boundaries between batches", "[NewFile]") {
+    Batch_Pool<HitBatch> pool(2);
+    HitQueue queue(3);
+    Extractor<HitQueue, HitBatchPtr> extractor(queue);
+
+    auto first = pool.acquire_batch_blocking();
+    first->push_back({10, 0, 0, 0});
+    queue.push(std::move(first));
+    queue.push(NewFile{"next.tpx3"});
+    auto second = pool.acquire_batch_blocking();
+    second->push_back({20, 0, 0, 0});
+    queue.push(std::move(second));
+
+    extractor.drain();
+    REQUIRE(extractor.front().toa() == 10);
+    extractor.pop();
+    REQUIRE_FALSE(extractor.front());
+    REQUIRE(extractor.new_file());
+    REQUIRE(extractor.file_message().filename == "next.tpx3");
+    extractor.consume_new_file();
+    REQUIRE(extractor.front().toa() == 20);
+}
+
 TEST_CASE("Trigger merger waits for every input and preserves sequence",
           "[EOF]") {
     Batch_Pool<TriggerBatch> pool(3);
@@ -88,6 +111,42 @@ TEST_CASE("Trigger merger waits for every input and preserves sequence",
     REQUIRE(std::holds_alternative<EndOfStream>(*merger.front()));
     merger.pop();
     REQUIRE_FALSE(merger.front());
+}
+
+TEST_CASE("Trigger merger forwards new-file boundaries and continues sequence",
+          "[NewFile]") {
+    Batch_Pool<TriggerBatch> pool(2);
+    auto queues =
+        make_array<TriggerQueue>(std::make_index_sequence<2>{}, size_t{4});
+    SPSCs2SPSC<TriggerQueue, 2, TriggerBatchPtr> merger(queues);
+
+    auto first = pool.acquire_batch_blocking();
+    first->sequence_number = 0;
+    first->push_back(10, 15);
+    queues[0].push(std::move(first));
+    queues[0].push(NewFile{"next.tpx3"});
+    auto second = pool.acquire_batch_blocking();
+    second->sequence_number = 1;
+    second->push_back(20, 15);
+    queues[1].push(std::move(second));
+    queues[1].push(NewFile{"next.tpx3"});
+
+    REQUIRE(merger.front());
+    REQUIRE(std::get<TriggerBatchPtr>(*merger.front())->sequence_number == 0);
+    merger.pop();
+    REQUIRE(merger.front());
+    REQUIRE(std::get<TriggerBatchPtr>(*merger.front())->sequence_number == 1);
+    merger.pop();
+    REQUIRE(merger.front());
+    REQUIRE(std::get<NewFile>(*merger.front()).filename == "next.tpx3");
+    merger.pop();
+
+    auto third = pool.acquire_batch_blocking();
+    third->sequence_number = 2;
+    third->push_back(30, 15);
+    queues[0].push(std::move(third));
+    REQUIRE(merger.front());
+    REQUIRE(std::get<TriggerBatchPtr>(*merger.front())->sequence_number == 2);
 }
 
 TEST_CASE("Hit merger waits for all inputs and emits its final batch",
@@ -210,6 +269,56 @@ TEST_CASE("Delay processes hits without triggers", "[EOF]") {
     REQUIRE(message);
     REQUIRE(std::holds_alternative<EndOfStream>(*message));
     output.pop();
+}
+
+TEST_CASE("New-file boundaries travel through hit merge and delay",
+          "[NewFile]") {
+    Batch_Pool<HitBatch> pool(8);
+    auto hits =
+        make_array<HitQueue>(std::make_index_sequence<4>{}, size_t{4});
+    TriggerQueue triggers(2);
+    HitQueue output(4);
+    auto first = pool.acquire_batch_blocking();
+    first->push_back({10, 1, 2, 3});
+    hits[0].push(std::move(first));
+    hits[0].push(NewFile{"next.tpx3"});
+    auto second = pool.acquire_batch_blocking();
+    second->push_back({20, 4, 5, 6});
+    hits[0].push(std::move(second));
+    hits[0].push(EndOfStream{});
+    for (size_t i = 1; i < hits.size(); ++i) {
+        hits[i].push(NewFile{"next.tpx3"});
+        hits[i].push(EndOfStream{});
+    }
+
+    Merger hit_merger(
+        pool, make_array_l<Extractor<HitQueue, HitBatchPtr>>(
+                  std::make_index_sequence<4>{}, [&hits](size_t i) {
+                      return Extractor<HitQueue, HitBatchPtr>(hits[i]);
+                  }));
+    triggers.push(NewFile{"next.tpx3"});
+    triggers.push(EndOfStream{});
+    Camera camera;
+    {
+        Delay<Merger, TriggerQueue, HitQueue> delay(hit_merger, triggers,
+                                                    output, pool, camera);
+        auto* message = wait_front(output);
+        REQUIRE(message);
+        REQUIRE(std::get<HitBatchPtr>(*message)->toa[0] == 10);
+        output.pop();
+        message = wait_front(output);
+        REQUIRE(message);
+        REQUIRE(std::get<NewFile>(*message).filename == "next.tpx3");
+        output.pop();
+        message = wait_front(output);
+        REQUIRE(message);
+        REQUIRE(std::get<HitBatchPtr>(*message)->toa[0] == 20);
+        output.pop();
+        message = wait_front(output);
+        REQUIRE(message);
+        REQUIRE(std::holds_alternative<EndOfStream>(*message));
+        output.pop();
+    }
 }
 
 TEST_CASE("Sorter emits a retained full batch before EOF", "[EOF]") {

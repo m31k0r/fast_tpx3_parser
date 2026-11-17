@@ -37,7 +37,7 @@ class Worker {
                            backoff.pause();
                            if (stop_token.stop_requested()) return;
                        }
-                       return;
+                       continue;
                    }
                     ba = std::move(std::get<U64BatchPtr>(message));
                 }

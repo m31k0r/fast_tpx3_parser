@@ -15,6 +15,8 @@ class SPSCs2SPSC {
     std::optional<Message> current;
     std::array<InQueue, N>& in;
     std::array<bool, N> ended{};
+    std::array<bool, N> at_new_file{};
+    std::array<std::optional<NewFile>, N> new_files{};
     size_t sequence_number = 0;
     bool eof_emitted = false;
 
@@ -26,25 +28,55 @@ class SPSCs2SPSC {
         if (eof_emitted) return nullptr;
 
         for (size_t i = 0; i < N; ++i) {
-            if (not ended[i]) {
+            if (not ended[i] && not at_new_file[i]) {
                 auto* message = in[i].front();
                 if (message && std::holds_alternative<EndOfStream>(*message)) {
                     in[i].pop();
                     ended[i] = true;
+                } else if (message &&
+                           std::holds_alternative<NewFile>(*message)) {
+                    new_files[i] = std::get<NewFile>(*message);
+                    in[i].pop();
+                    at_new_file[i] = true;
                 }
             }
         }
-        if (std::all_of(ended.begin(), ended.end(), [](bool e) { return e; })) {
+        const bool all_ended =
+            std::all_of(ended.begin(), ended.end(), [](bool e) { return e; });
+        const bool all_new_file =
+            std::all_of(at_new_file.begin(), at_new_file.end(),
+                        [](bool boundary) { return boundary; });
+        const bool all_at_boundary = [&] {
+            for (size_t i = 0; i < N; ++i) {
+                if (not ended[i] && not at_new_file[i]) return false;
+            }
+            return true;
+        }();
+        ASSERT(not all_at_boundary || all_ended || all_new_file,
+               "Mismatched trigger-stream boundaries");
+        if (all_ended) {
             current.emplace(EndOfStream{});
             eof_emitted = true;
             return &*current;
         }
+        if (all_new_file) {
+            for (size_t i = 1; i < N; ++i) {
+                ASSERT(new_files[i]->filename == new_files[0]->filename,
+                       "Mismatched new-file boundaries");
+            }
+            current.emplace(*new_files[0]);
+            at_new_file.fill(false);
+            for (auto& file : new_files) file.reset();
+            return &*current;
+        }
 
         const auto index = sequence_number % N;
-        if (ended[index]) {
+        if (ended[index] || at_new_file[index]) {
             for (size_t i = 0; i < N; ++i) {
                 auto* message = in[i].front();
-                ASSERT(not message || std::holds_alternative<EndOfStream>(*message),
+                ASSERT(not message ||
+                           std::holds_alternative<EndOfStream>(*message) ||
+                           std::holds_alternative<NewFile>(*message),
                        "Missing trigger batch sequence");
             }
             return nullptr;
