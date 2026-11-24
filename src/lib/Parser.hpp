@@ -184,7 +184,6 @@ public:
     }
 
     void new_file(std::string file_name) {
-        flush();
         std::ranges::for_each(m_batch_handle.pusher.hit_inj,
                               [file_name](auto &inj) { inj.new_file(file_name); });
         m_batch_handle.pusher.trigger_inj.new_file(file_name);

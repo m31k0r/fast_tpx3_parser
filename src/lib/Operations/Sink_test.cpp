@@ -17,3 +17,16 @@ TEST_CASE("Sink consumes a batch and recognizes EOF messages") {
     REQUIRE(sink(queue));
     REQUIRE(queue.size() == 0);
 }
+
+TEST_CASE("Sink acknowledges explicit flush messages") {
+    using Message = QueueMessage<HitBatchPtr>;
+    rigtorp::SPSCQueue<Message> queue(4);
+    Sink<decltype(queue), HitBatchPtr> sink;
+    queue.push(Flush{});
+    queue.push(Flush{});
+    REQUIRE_FALSE(sink(queue));
+    REQUIRE_FALSE(sink(queue));
+    sink.wait_for_flush();
+    sink.wait_for_flush();
+    REQUIRE(queue.size() == 0);
+}

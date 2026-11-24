@@ -16,6 +16,7 @@ class SPSCs2SPSC {
     std::array<InQueue, N>& in;
     std::array<bool, N> ended{};
     std::array<bool, N> at_new_file{};
+    std::array<bool, N> at_flush{};
     std::array<std::optional<NewFile>, N> new_files{};
     size_t sequence_number = 0;
     bool eof_emitted = false;
@@ -28,7 +29,7 @@ class SPSCs2SPSC {
         if (eof_emitted) return nullptr;
 
         for (size_t i = 0; i < N; ++i) {
-            if (not ended[i] && not at_new_file[i]) {
+            if (not ended[i] && not at_new_file[i] && not at_flush[i]) {
                 auto* message = in[i].front();
                 if (message && std::holds_alternative<EndOfStream>(*message)) {
                     in[i].pop();
@@ -38,6 +39,9 @@ class SPSCs2SPSC {
                     new_files[i] = std::get<NewFile>(*message);
                     in[i].pop();
                     at_new_file[i] = true;
+                } else if (message && std::holds_alternative<Flush>(*message)) {
+                    in[i].pop();
+                    at_flush[i] = true;
                 }
             }
         }
@@ -46,13 +50,17 @@ class SPSCs2SPSC {
         const bool all_new_file =
             std::all_of(at_new_file.begin(), at_new_file.end(),
                         [](bool boundary) { return boundary; });
+        const bool all_flush =
+            std::all_of(at_flush.begin(), at_flush.end(),
+                        [](bool boundary) { return boundary; });
         const bool all_at_boundary = [&] {
             for (size_t i = 0; i < N; ++i) {
-                if (not ended[i] && not at_new_file[i]) return false;
+                if (not ended[i] && not at_new_file[i] && not at_flush[i])
+                    return false;
             }
             return true;
         }();
-        ASSERT(not all_at_boundary || all_ended || all_new_file,
+        ASSERT(not all_at_boundary || all_ended || all_new_file || all_flush,
                "Mismatched trigger-stream boundaries");
         if (all_ended) {
             current.emplace(EndOfStream{});
@@ -69,14 +77,20 @@ class SPSCs2SPSC {
             for (auto& file : new_files) file.reset();
             return &*current;
         }
+        if (all_flush) {
+            current.emplace(Flush{});
+            at_flush.fill(false);
+            return &*current;
+        }
 
         const auto index = sequence_number % N;
-        if (ended[index] || at_new_file[index]) {
+        if (ended[index] || at_new_file[index] || at_flush[index]) {
             for (size_t i = 0; i < N; ++i) {
                 auto* message = in[i].front();
                 ASSERT(not message ||
                            std::holds_alternative<EndOfStream>(*message) ||
-                           std::holds_alternative<NewFile>(*message),
+                           std::holds_alternative<NewFile>(*message) ||
+                           std::holds_alternative<Flush>(*message),
                        "Missing trigger batch sequence");
             }
             return nullptr;

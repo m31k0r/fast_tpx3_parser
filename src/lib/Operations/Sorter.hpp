@@ -139,6 +139,17 @@ public:
         }
     }
 
+    void flush(std::stop_token stop) {
+        if (buffer_filled) {
+            flush_with_buffer(stop);
+        }
+        adaptive_backoff backoff;
+        while (not m_sorted_hit_queue.try_push(Flush{})) {
+            backoff.pause();
+            if (stop.stop_requested()) return;
+        }
+    }
+
     void start_worker() {
         m_thread = std::jthread([this](std::stop_token stop) {
                 pthread_setname_np(pthread_self(), "Sorter");
@@ -154,6 +165,10 @@ public:
                     }
                     if (std::holds_alternative<NewFile>(message)) {
                         new_file(std::get<NewFile>(message), stop);
+                        continue;
+                    }
+                    if (std::holds_alternative<Flush>(message)) {
+                        flush(stop);
                         continue;
                     }
 

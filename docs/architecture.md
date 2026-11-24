@@ -63,14 +63,15 @@ currently accumulating batches. When a batch fills, it is submitted to its
 queue and replaced with a batch from the pool. Queue capacity and pool size are
 defined in `src/Constants.hpp`.
 
-Pipeline queues carry a `QueueMessage`, a variant of a batch pointer and
-`EndOfFile`. `flush()` sends any pending batch without ending the stream;
-`finish()` flushes, sends EOF to each input queue, and waits for the sink.
-No further input may be pushed after finish. Sorters emit buffered hits before
-EOF, and the hit and trigger mergers wait for all their inputs to end. The
-delay stage processes remaining hits after trigger EOF using the last observed
-delay trigger (or zero if none was observed), then flushes and sends EOF to the
-sink.
+Pipeline queues carry a `QueueMessage`, a variant of a batch pointer and the
+`EndOfStream`, `NewFile`, and `Flush` control messages. `flush()` sends any
+pending batch followed by an explicit `Flush` message without ending the
+stream; `finish()` flushes, sends EOF to each input queue, and waits for the
+sink. No further input may be pushed after finish. Sorters emit buffered hits
+before flush or EOF, and the hit and trigger mergers synchronize flushes and
+wait for all their inputs to end. The delay stage processes remaining hits
+after trigger EOF using the last observed delay trigger (or zero if none was
+observed), then flushes and sends EOF to the sink.
 
 ### Sorting and merging
 

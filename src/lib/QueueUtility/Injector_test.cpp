@@ -38,12 +38,14 @@ TEST_CASE("Injector sends batches before EOF", "[Injector]") {
     using Message = QueueMessage<U64BatchPtr>;
     using MessageQueue = rigtorp::SPSCQueue<Message>;
     Batch_Pool<U64Batch> pool(3);
-    MessageQueue queue(4);
+    MessageQueue queue(16);
     Injector<MessageQueue, U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>
         injector(queue, pool);
 
     injector.flush();
-    REQUIRE_FALSE(queue.front());
+    REQUIRE(queue.front());
+    REQUIRE(std::holds_alternative<Flush>(*queue.front()));
+    queue.pop();
     for (size_t i = 0; i < BATCH_SIZE; ++i) {
         REQUIRE(injector.try_push(i));
     }
@@ -59,6 +61,10 @@ TEST_CASE("Injector sends batches before EOF", "[Injector]") {
     REQUIRE(full->data[0] == 0);
     REQUIRE(full->data[BATCH_SIZE - 1] == BATCH_SIZE - 1);
     REQUIRE(full->sequence_number == 0);
+    queue.pop();
+    REQUIRE(std::holds_alternative<Flush>(*queue.front()));
+    queue.pop();
+    REQUIRE(std::holds_alternative<Flush>(*queue.front()));
     queue.pop();
     REQUIRE(queue.front());
     auto &partial = std::get<U64BatchPtr>(*queue.front());
@@ -76,7 +82,7 @@ TEST_CASE("Injector broadcasts EOF to every queue", "[Injector]") {
     using MessageQueue = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
     Batch_Pool<U64Batch> pool(2);
     auto queues =
-        make_array<MessageQueue>(std::make_index_sequence<3>{}, size_t{2});
+        make_array<MessageQueue>(std::make_index_sequence<3>{}, size_t{3});
     Injector<decltype(queues), U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>
         injector(queues, pool);
 
@@ -97,7 +103,7 @@ TEST_CASE("Injector broadcasts EOF to every queue", "[Injector]") {
 TEST_CASE("Injector resumes after a new-file boundary", "[Injector]") {
     using MessageQueue = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
     Batch_Pool<U64Batch> pool(3);
-    MessageQueue queue(5);
+    MessageQueue queue(8);
     Injector<MessageQueue, U64BatchPtr, Batch_Pool<U64Batch>, uint64_t>
         injector(queue, pool);
 

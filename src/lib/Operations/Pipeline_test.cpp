@@ -83,6 +83,24 @@ TEST_CASE("Extractor preserves file boundaries between batches", "[NewFile]") {
     REQUIRE(extractor.front().toa() == 20);
 }
 
+TEST_CASE("Extractor preserves explicit flush boundaries", "[Flush]") {
+    Batch_Pool<HitBatch> pool(2);
+    HitQueue queue(2);
+    Extractor<HitQueue, HitBatchPtr> extractor(queue);
+
+    auto batch = pool.acquire_batch_blocking();
+    batch->push_back({10, 0, 0, 0});
+    queue.push(std::move(batch));
+    queue.push(Flush{});
+
+    REQUIRE(extractor.front().toa() == 10);
+    extractor.pop();
+    REQUIRE_FALSE(extractor.front());
+    REQUIRE(extractor.flush());
+    extractor.consume_flush();
+    REQUIRE_FALSE(extractor.flush());
+}
+
 TEST_CASE("Trigger merger waits for every input and preserves sequence",
           "[EOF]") {
     Batch_Pool<TriggerBatch> pool(3);
@@ -147,6 +165,48 @@ TEST_CASE("Trigger merger forwards new-file boundaries and continues sequence",
     queues[0].push(std::move(third));
     REQUIRE(merger.front());
     REQUIRE(std::get<TriggerBatchPtr>(*merger.front())->sequence_number == 2);
+}
+
+TEST_CASE("Trigger merger synchronizes flush boundaries", "[Flush]") {
+    Batch_Pool<TriggerBatch> pool(1);
+    auto queues =
+        make_array<TriggerQueue>(std::make_index_sequence<2>{}, size_t{2});
+    SPSCs2SPSC<TriggerQueue, 2, TriggerBatchPtr> merger(queues);
+    queues[0].push(Flush{});
+    REQUIRE_FALSE(merger.front());
+    queues[1].push(Flush{});
+    REQUIRE(merger.front());
+    REQUIRE(std::holds_alternative<Flush>(*merger.front()));
+    merger.pop();
+    REQUIRE_FALSE(merger.front());
+}
+
+TEST_CASE("Flush travels through hit and trigger mergers and delay", "[Flush]") {
+    Batch_Pool<HitBatch> pool(4);
+    auto hit_queues =
+        make_array<HitQueue>(std::make_index_sequence<4>{}, size_t{2});
+    auto trigger_queues =
+        make_array<TriggerQueue>(std::make_index_sequence<1>{}, size_t{2});
+    HitQueue output(2);
+    Merger hit_merger(
+        pool, make_array_l<Extractor<HitQueue, HitBatchPtr>>(
+                  std::make_index_sequence<4>{}, [&hit_queues](size_t i) {
+                      return Extractor<HitQueue, HitBatchPtr>(hit_queues[i]);
+                  }));
+    SPSCs2SPSC<TriggerQueue, 1, TriggerBatchPtr> trigger_merger(
+        trigger_queues);
+    for (auto& queue : hit_queues) queue.push(Flush{});
+    trigger_queues[0].push(Flush{});
+    Camera camera;
+    {
+        Delay<Merger, decltype(trigger_merger), HitQueue> delay(
+            hit_merger, trigger_merger, output, pool,
+            camera.diff_trigger_type, camera.delay_trigger_type);
+        auto* message = wait_front(output);
+        REQUIRE(message);
+        REQUIRE(std::holds_alternative<Flush>(*message));
+        output.pop();
+    }
 }
 
 TEST_CASE("Hit merger waits for all inputs and emits its final batch",
@@ -342,6 +402,32 @@ TEST_CASE("Sorter emits a retained full batch before EOF", "[EOF]") {
     message = wait_front(output);
     REQUIRE(message);
     REQUIRE(std::holds_alternative<EndOfStream>(*message));
+    output.pop();
+}
+
+TEST_CASE("Sorter flushes its retained batch before forwarding flush",
+          "[Flush]") {
+    using RawQueue = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
+    Batch_Pool<U64Batch> raw_pool(1);
+    Batch_Pool<HitBatch> hit_pool(1);
+    RawQueue input(2);
+    HitQueue output(2);
+    Camera camera;
+    auto sorter = std::make_unique<Sort<RawQueue, HitQueue>>(
+        input, output, hit_pool, camera);
+    auto raw = raw_pool.acquire_batch_blocking();
+    for (size_t i = 0; i < BATCH_SIZE; ++i) raw->push_back(0);
+    input.push(std::move(raw));
+    input.push(Flush{});
+    sorter->start_worker();
+
+    auto* message = wait_front(output);
+    REQUIRE(message);
+    REQUIRE(std::get<HitBatchPtr>(*message)->size == BATCH_SIZE);
+    output.pop();
+    message = wait_front(output);
+    REQUIRE(message);
+    REQUIRE(std::holds_alternative<Flush>(*message));
     output.pop();
 }
 

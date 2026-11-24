@@ -38,18 +38,39 @@ class Injector {
         return true;
     }
 
-   public:
-    Injector(OutQueue &queue, BatchPool &pool) : queue(queue), pool(pool) {}
-    void flush() {
-        if (not current_batch) return;
+    bool flush_batch(std::stop_token stop) {
         adaptive_backoff backoff;
-        while (not inject()) {
+        while (current_batch && not inject()) {
+            if (stop.stop_requested()) return false;
             backoff.pause();
         }
+        return true;
+    }
+
+   public:
+    Injector(OutQueue &queue, BatchPool &pool) : queue(queue), pool(pool) {}
+    bool flush(std::stop_token stop = {}) {
+        if (finished) return true;
+        if (not flush_batch(stop)) return false;
+        adaptive_backoff backoff;
+        if constexpr (InQueueable<OutQueue, EndOfStream>) {
+            while (not queue.try_push(Flush{})) {
+                if (stop.stop_requested()) return false;
+                backoff.pause();
+            }
+        } else if constexpr (requires { queue.begin(); queue.end(); }) {
+            for (auto &q : queue) {
+                while (not q.try_push(Flush{})) {
+                    if (stop.stop_requested()) return false;
+                    backoff.pause();
+                }
+            }
+        }
+        return true;
     };
     bool finish(std::stop_token stop = {}) {
         if (finished) return true;
-        flush();
+        if (not flush_batch(stop)) return false;
         adaptive_backoff backoff;
         if constexpr (InQueueable<OutQueue, EndOfStream>) {
             while (not queue.try_push(EndOfStream{})) {
@@ -69,7 +90,7 @@ class Injector {
     }
     bool new_file(std::string file_name, std::stop_token stop = {}) {
         if (finished) return true;
-        flush();
+        if (not flush_batch(stop)) return false;
         adaptive_backoff backoff;
         if constexpr (InQueueable<OutQueue, EndOfStream>) {
             while (not queue.try_push(NewFile{file_name})) {

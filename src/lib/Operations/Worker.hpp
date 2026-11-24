@@ -39,6 +39,14 @@ class Worker {
                        }
                        continue;
                    }
+                    if (std::holds_alternative<Flush>(message)) {
+                        adaptive_backoff backoff;
+                        while (not out.try_push(Flush{})) {
+                            backoff.pause();
+                            if (stop_token.stop_requested()) return;
+                        }
+                        continue;
+                    }
                     ba = std::move(std::get<U64BatchPtr>(message));
                 }
                 if (ba) {
