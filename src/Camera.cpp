@@ -1,4 +1,4 @@
-#include "Camera.hpp"
+#include "lib/Parsing/Camera.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <vector>

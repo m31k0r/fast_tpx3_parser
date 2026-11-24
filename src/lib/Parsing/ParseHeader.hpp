@@ -34,6 +34,7 @@ class ParseHeader {
                 case FRAME_NIBBLE: {
                 }
                 default:
+                    m_pusher.flush();
                     break;
             }
         }

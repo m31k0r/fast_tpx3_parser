@@ -15,14 +15,14 @@
 
 inline auto Compare = [](PreParsed &a, PreParsed &b) { return a.toa < b.toa; };
 
-template<typename InQueue, typename OutQueue>
+template<typename InQueue, typename OutQueue, typename Camera>
     requires SCQueueable<InQueue, QueueMessage<U64BatchPtr> > &&
              SCQueueable<OutQueue, QueueMessage<HitBatchPtr> >
 class Sort {
     int in_out = 0;
     InQueue &m_hit_queue;
     OutQueue &m_sorted_hit_queue;
-    ParseHit parsehit;
+    ParseHit<Camera> parsehit;
     Batch_Pool<HitBatch> &pool;
 
     Buffer<PreParsed, BATCH_SIZE> buffer_;
@@ -77,6 +77,7 @@ public:
     };
 
     void flush_with_no_buffer(U64BatchPtr batch, std::stop_token stop) {
+        in_out+= batch->size;
         const auto n = batch->size;
         std::transform(
             batch->begin(), batch->end(), buffer2_.begin(),
@@ -90,7 +91,7 @@ public:
         ASSERT(hit_batch->size == n);
         adaptive_backoff backoff;
         in_out -= hit_batch->size;
-        ASSERT(in_out >= 0);
+        ASSERT(in_out == 0);
         while (not m_sorted_hit_queue.try_push(std::move(hit_batch))) {
             backoff.pause();
             if (stop.stop_requested()) {
@@ -162,8 +163,12 @@ public:
                     const auto batch_size = batch->size;
                     if (batch_size == 0) continue;
 
-                    if (not buffer_filled) {
+                    if (not buffer_filled and batch_size == BATCH_SIZE) {
                         fill_buffer(std::move(batch));
+                        continue;
+                    }
+                    if (not buffer_filled and batch_size != BATCH_SIZE) {
+                        flush_with_no_buffer(std::move(batch), stop);
                         continue;
                     }
 

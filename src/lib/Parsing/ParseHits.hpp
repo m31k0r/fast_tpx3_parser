@@ -1,16 +1,16 @@
 #pragma once
+#include <compare>
 #include <cstdint>
 #include "Batch/Batch.hpp"
 #include "Batch/Batch_Pool.hpp"
-#include "Camera.hpp"
 #include "Parsing/tpx3_helper.hpp"
-#include "Rotation.hpp"
-#include "clock_correction.hpp"
+#include "Utility/clock_correction.hpp"
 
 struct PreParsed {
     uint64_t data;
     uint64_t toa;
 };
+template <typename Camera>
 class ParseHit {
     Batch_Pool<HitBatch> &batch_pool;
     ClockCorrection<TWENTY_SIXISH_SECONDS> clock_correction_;

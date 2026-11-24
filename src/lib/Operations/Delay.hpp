@@ -7,7 +7,6 @@
 #include "Batch/Batch.hpp"
 #include "Batch/Batch_Pool.hpp"
 #include "Constants.hpp"
-#include "Parsing/Camera.hpp"
 #include "QueueUtility/Extractor.hpp"
 #include "QueueUtility/Injector.hpp"
 #include "Utility/AdaptivBackoff.hpp"
@@ -19,12 +18,15 @@ class Delay {
     Extractor<HitQueue, HitBatchPtr> hit_extractor;
     Extractor<TriggerQueue, TriggerBatchPtr> trigger_extractor;
     Injector<OutQueue, HitBatchPtr, Batch_Pool<HitBatch>, Hit> inj;
-    Camera &camera;
+
+    uint16_t diff_trigger_type;
+    uint16_t delay_trigger_type;
+
     uint64_t last_delay_time = 0;
     uint64_t diff_time = 0;
     std::jthread m_thread;
 
-    bool at_boundary(const auto& extractor) const {
+    bool at_boundary(const auto &extractor) const {
         return extractor.eof() || extractor.new_file();
     }
 
@@ -37,7 +39,7 @@ class Delay {
         }
         if (hit_extractor.new_file() && trigger_extractor.new_file()) {
             ASSERT(hit_extractor.file_message().filename ==
-                       trigger_extractor.file_message().filename,
+                   trigger_extractor.file_message().filename,
                    "Mismatched hit and trigger files");
             inj.new_file(hit_extractor.file_message().filename, stop);
             hit_extractor.consume_new_file();
@@ -70,7 +72,7 @@ class Delay {
             hit.tot(),
             hit.x(),
             hit.y(),
-            static_cast<uint32_t>(last_delay_time==0 ? 0:hit.toa() - last_delay_time),
+            static_cast<uint32_t>(last_delay_time == 0 ? 0 : hit.toa() - last_delay_time),
             static_cast<uint32_t>(diff_time)
         };
         while (not inj.try_push(out)) {
@@ -96,13 +98,13 @@ class Delay {
 
         if (not at_boundary(trigger_extractor)) {
             DEBUG_ASSERT(first_trigger);
-            if (first_trigger.type() == camera.diff_trigger_type) {
+            if (first_trigger.type() == diff_trigger_type) {
                 DEBUG_ASSERT(diff_time==0);
                 diff_time = first_trigger.toa() - last_delay_time;
                 trigger_extractor.pop();
                 return Step::Continue;
             }
-            if (first_trigger.type() != camera.delay_trigger_type) {
+            if (first_trigger.type() != delay_trigger_type) {
                 trigger_extractor.pop();
                 return Step::Continue;
             }
@@ -113,9 +115,9 @@ class Delay {
                 return Step::Continue;
             }
         }
-        std::cout<<std::flush;
-            const auto result = emit_hit(first_hit, stop);
-            return result;
+        std::cout << std::flush;
+        const auto result = emit_hit(first_hit, stop);
+        return result;
     }
 
     void run(std::stop_token stop) {
@@ -129,11 +131,12 @@ class Delay {
 
 public:
     Delay(HitQueue &hit, TriggerQueue &trigger, OutQueue &out,
-          Batch_Pool<HitBatch> &pool, Camera &camera)
+          Batch_Pool<HitBatch> &pool, uint16_t diff_trigger_type, uint16_t delay_trigger_type)
         : hit_extractor(hit),
           trigger_extractor(trigger),
           inj(out, pool),
-          camera(camera) {
+          diff_trigger_type(diff_trigger_type),
+          delay_trigger_type(delay_trigger_type) {
         m_thread = std::jthread([this](std::stop_token stop) { run(stop); });
     }
 };

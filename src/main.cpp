@@ -1,10 +1,10 @@
 #include <chrono>
 #include <iostream>
 #include <numeric>
-#include "Operations/Exporter.hpp"
-#include "Parser.hpp"
-#include "Parsing/tpx3_helper.hpp"
-#include "Utility/Memory_Map.hpp"
+#include "lib/Operations/Exporter.hpp"
+#include "lib/Parser.hpp"
+#include "lib/Parsing/tpx3_helper.hpp"
+#include "lib/Utility/Memory_Map.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -16,7 +16,9 @@
 #include <thread>
 #include <vector>
 
-constexpr auto num_runs = 1;
+#include "Camera.hpp"
+
+constexpr auto num_runs = 10;
 
 void printHistogram(const std::vector<double>& runtimes, int numBuckets = 10,
                     const std::string& unit = "ms") {
@@ -96,10 +98,12 @@ int main(int argc, char* argv[]) {
     MemoryMap mmap(filename);
     const auto file_size_gb =
         std::distance(mmap.begin(), mmap.end()) * sizeof(uint64_t) * 1e-9;
-    Parser<2> parser;
-    //Exporter<HitSPSC, HitBatchPtr> exporter;
-    Sink<HitSPSC, HitBatchPtr> exporter;
-    exporter.start(parser.out_queue);
+    HitSPSC outqueue(10);
+    Camera camera;
+    Parser<2, HitSPSC, Camera> parser(outqueue, camera);
+    Exporter<HitSPSC, HitBatchPtr> exporter;
+    //Sink<HitSPSC, HitBatchPtr> exporter;
+    exporter.start(outqueue);
     for (int i = 0; i < num_runs; ++i) {
         const auto start = std::chrono::steady_clock::now();
         parser.new_file(filename);
