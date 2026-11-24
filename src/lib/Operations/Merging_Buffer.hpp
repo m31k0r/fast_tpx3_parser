@@ -31,6 +31,7 @@ class Merger {
             if (not hit) {
                 if (extractors[chip].eof() || extractors[chip].new_file())
                     continue;
+                if (extractors[chip].flush()) continue;
                 return -1;
             }
             if (earliest_chip == -1 || hit.toa() < earliest_time) {
@@ -48,12 +49,17 @@ class Merger {
         const bool all_new_file =
             std::all_of(extractors.begin(), extractors.end(),
                         [](const auto& e) { return e.new_file(); });
+        const bool all_flush =
+            std::all_of(extractors.begin(), extractors.end(),
+                        [](const auto& e) { return e.flush(); });
         const bool all_at_boundary =
             std::all_of(extractors.begin(), extractors.end(),
-                        [](const auto& e) { return e.eof() || e.new_file(); });
-        ASSERT(not all_at_boundary || all_eof || all_new_file,
+                        [](const auto& e) {
+                            return e.eof() || e.new_file() || e.flush();
+                        });
+        ASSERT(not all_at_boundary || all_eof || all_new_file || all_flush,
                "Mismatched hit-stream boundaries");
-        if (not all_eof && not all_new_file) return false;
+        if (not all_eof && not all_new_file && not all_flush) return false;
         if (current_batch->size) {
             current.emplace(std::move(current_batch));
             return true;
@@ -62,7 +68,7 @@ class Merger {
         if (all_eof) {
             current.emplace(EndOfStream{});
             eof_emitted = true;
-        } else {
+        } else if (all_new_file) {
             for (size_t i = 1; i < extractors.size(); ++i) {
                 ASSERT(extractors[i].file_message().filename ==
                            extractors[0].file_message().filename,
@@ -71,6 +77,10 @@ class Merger {
             current.emplace(extractors.front().file_message());
             for (auto& extractor : extractors)
                 extractor.consume_new_file();
+        } else {
+            current.emplace(Flush{});
+            for (auto& extractor : extractors)
+                extractor.consume_flush();
         }
         return true;
     }

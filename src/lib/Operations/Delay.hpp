@@ -27,15 +27,24 @@ class Delay {
     std::jthread m_thread;
 
     bool at_boundary(const auto &extractor) const {
-        return extractor.eof() || extractor.new_file();
+        return extractor.eof() || extractor.new_file() || extractor.flush();
     }
 
     Step finish_boundary(std::stop_token stop) {
         ASSERT(hit_extractor.eof() == trigger_extractor.eof(),
                "Mismatched hit and trigger stream boundaries");
+        ASSERT(hit_extractor.new_file() == trigger_extractor.new_file(),
+               "Mismatched hit and trigger stream boundaries");
+        ASSERT(hit_extractor.flush() == trigger_extractor.flush(),
+               "Mismatched hit and trigger stream boundaries");
         if (hit_extractor.eof() && trigger_extractor.eof()) {
             inj.finish(stop);
             return Step::Finished;
+        }
+        if (hit_extractor.flush() && trigger_extractor.flush()) {
+            if (not inj.flush(stop)) return Step::Stopped;
+            hit_extractor.consume_flush();
+            trigger_extractor.consume_flush();
         }
         if (hit_extractor.new_file() && trigger_extractor.new_file()) {
             ASSERT(hit_extractor.file_message().filename ==

@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <iostream>
 #include <stop_token>
 #include <thread>
@@ -13,16 +14,11 @@ class Sink {
     size_t counter_batch = 0;
     size_t counter = 0;
     std::jthread m_thread;
-    bool received_flush = false;
+    std::atomic_size_t received_flushes = 0;
 
     void consume(const BatchPtr& batch) {
         ++counter_batch;
         counter += batch->size;
-        if (batch->size != BATCH_SIZE) {
-            received_flush = true;
-        } else {
-            received_flush = false;
-        }
     }
 
    public:
@@ -34,6 +30,8 @@ class Sink {
                     queue.pop();
                     return true;
                 }
+                if (std::holds_alternative<Flush>(*message))
+                    received_flushes.fetch_add(1);
                 if (std::holds_alternative<BatchPtr>(*message))
                     consume(std::get<BatchPtr>(*message));
                 queue.pop();
@@ -60,8 +58,14 @@ class Sink {
     }
     void wait_for_flush() {
         adaptive_backoff backoff;
-        while (not received_flush) {
-            backoff.pause();
+        for (;;) {
+            auto count = received_flushes.load();
+            if (count == 0) {
+                backoff.pause();
+            } else if (
+                received_flushes.compare_exchange_weak(count, count - 1)) {
+                return;
+            }
         }
     }
     ~Sink() {
