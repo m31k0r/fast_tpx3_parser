@@ -64,7 +64,10 @@ queue and replaced with a batch from the pool. Queue capacity and pool size are
 defined in `src/Constants.hpp`.
 
 Pipeline queues carry a `QueueMessage`, a variant of a batch pointer and the
-`EndOfStream`, `NewFile`, and `Flush` control messages. `flush()` sends any
+`EndOfStream`, `NewFile`, and `Flush` control messages. Extractors expose the
+current control boundary as a `QueueBoundary`; `NewFile` and `Flush` must be
+consumed before reading continues, while `EndOfStream` remains terminal.
+`flush()` sends any
 pending batch followed by an explicit `Flush` message without ending the
 stream; `finish()` flushes, sends EOF to each input queue, and waits for the
 sink. No further input may be pushed after finish. Sorters emit buffered hits

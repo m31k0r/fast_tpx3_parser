@@ -33,21 +33,17 @@ class Extractor {
 
     std::deque<QueueMessage<OwnedBatchPtr>> overflow;
     bool control_queued = false;
-    bool eof_reached = false;
-    bool new_file_reached = false;
-    bool flush_reached = false;
+    QueueBoundary boundary_state = QueueBoundary::None;
 
     void load_message(QueueMessage<OwnedBatchPtr> message) {
+        boundary_state = queue_boundary(message);
         if (std::holds_alternative<EndOfStream>(message)) {
-            eof_reached = true;
             current_batch = nullptr;
             current_batch_obj = EndOfStream{};
         } else if (std::holds_alternative<NewFile>(message)) {
-            new_file_reached = true;
             current_batch = nullptr;
             current_batch_obj = std::get<NewFile>(std::move(message));
         } else if (std::holds_alternative<Flush>(message)) {
-            flush_reached = true;
             current_batch = nullptr;
             current_batch_obj = Flush{};
         } else {
@@ -82,7 +78,7 @@ class Extractor {
 
     void load_next_batch() {
         current_batch = nullptr;
-        if (eof_reached || new_file_reached || flush_reached) return;
+        if (boundary_state != QueueBoundary::None) return;
         if (overflow.empty() && queue.front()) {
             if constexpr (SCQueueable<InQueue, QueueMessage<BatchPtr>>) {
                 QueueMessage<BatchPtr> message = std::move(*queue.front());
@@ -113,9 +109,7 @@ class Extractor {
         if (not overflow.empty()) {
             QueueMessage<OwnedBatchPtr> message = std::move(overflow.front());
             overflow.pop_front();
-            if (std::holds_alternative<EndOfStream>(message) ||
-                std::holds_alternative<NewFile>(message) ||
-                std::holds_alternative<Flush>(message)) {
+            if (queue_boundary(message) != QueueBoundary::None) {
                 control_queued = false;
             }
             load_message(std::move(message));
@@ -145,29 +139,22 @@ class Extractor {
     };
 
     void drain() {
-        while (queue.front() && not control_queued && not eof_reached &&
-               not new_file_reached && not flush_reached) {
+        while (queue.front() && not control_queued &&
+               boundary_state == QueueBoundary::None) {
             copy_front();
         }
     }
 
-    bool eof() const { return eof_reached; }
-    bool new_file() const { return new_file_reached; }
-    bool flush() const { return flush_reached; }
+    QueueBoundary boundary() const { return boundary_state; }
     const NewFile &file_message() const {
-        DEBUG_ASSERT(new_file_reached);
+        DEBUG_ASSERT(boundary_state == QueueBoundary::NewFile);
         return std::get<NewFile>(current_batch_obj);
     }
 
-    void consume_new_file() {
-        DEBUG_ASSERT(new_file_reached);
-        new_file_reached = false;
-        current_batch_obj = OwnedBatchPtr(nullptr);
-    }
-
-    void consume_flush() {
-        DEBUG_ASSERT(flush_reached);
-        flush_reached = false;
+    void consume_boundary() {
+        DEBUG_ASSERT(boundary_state == QueueBoundary::NewFile ||
+                     boundary_state == QueueBoundary::Flush);
+        boundary_state = QueueBoundary::None;
         current_batch_obj = OwnedBatchPtr(nullptr);
     }
 

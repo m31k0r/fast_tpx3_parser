@@ -14,9 +14,7 @@ class SPSCs2SPSC {
     using Message = QueueMessage<T>;
     std::optional<Message> current;
     std::array<InQueue, N>& in;
-    std::array<bool, N> ended{};
-    std::array<bool, N> at_new_file{};
-    std::array<bool, N> at_flush{};
+    std::array<QueueBoundary, N> boundaries{};
     std::array<std::optional<NewFile>, N> new_files{};
     size_t sequence_number = 0;
     bool eof_emitted = false;
@@ -29,68 +27,51 @@ class SPSCs2SPSC {
         if (eof_emitted) return nullptr;
 
         for (size_t i = 0; i < N; ++i) {
-            if (not ended[i] && not at_new_file[i] && not at_flush[i]) {
+            if (boundaries[i] == QueueBoundary::None) {
                 auto* message = in[i].front();
-                if (message && std::holds_alternative<EndOfStream>(*message)) {
+                if (message && queue_boundary(*message) != QueueBoundary::None) {
+                    boundaries[i] = queue_boundary(*message);
+                    if (boundaries[i] == QueueBoundary::NewFile)
+                        new_files[i] = std::get<NewFile>(*message);
                     in[i].pop();
-                    ended[i] = true;
-                } else if (message &&
-                           std::holds_alternative<NewFile>(*message)) {
-                    new_files[i] = std::get<NewFile>(*message);
-                    in[i].pop();
-                    at_new_file[i] = true;
-                } else if (message && std::holds_alternative<Flush>(*message)) {
-                    in[i].pop();
-                    at_flush[i] = true;
                 }
             }
         }
-        const bool all_ended =
-            std::all_of(ended.begin(), ended.end(), [](bool e) { return e; });
-        const bool all_new_file =
-            std::all_of(at_new_file.begin(), at_new_file.end(),
-                        [](bool boundary) { return boundary; });
-        const bool all_flush =
-            std::all_of(at_flush.begin(), at_flush.end(),
-                        [](bool boundary) { return boundary; });
-        const bool all_at_boundary = [&] {
-            for (size_t i = 0; i < N; ++i) {
-                if (not ended[i] && not at_new_file[i] && not at_flush[i])
-                    return false;
-            }
-            return true;
-        }();
-        ASSERT(not all_at_boundary || all_ended || all_new_file || all_flush,
+        const bool all_at_boundary =
+            std::all_of(boundaries.begin(), boundaries.end(), [](auto boundary) {
+                return boundary != QueueBoundary::None;
+            });
+        const auto boundary = boundaries.front();
+        ASSERT(not all_at_boundary ||
+                   std::all_of(boundaries.begin(), boundaries.end(),
+                               [boundary](auto b) { return b == boundary; }),
                "Mismatched trigger-stream boundaries");
-        if (all_ended) {
+        if (all_at_boundary && boundary == QueueBoundary::EndOfStream) {
             current.emplace(EndOfStream{});
             eof_emitted = true;
             return &*current;
         }
-        if (all_new_file) {
+        if (all_at_boundary && boundary == QueueBoundary::NewFile) {
             for (size_t i = 1; i < N; ++i) {
                 ASSERT(new_files[i]->filename == new_files[0]->filename,
                        "Mismatched new-file boundaries");
             }
             current.emplace(*new_files[0]);
-            at_new_file.fill(false);
+            boundaries.fill(QueueBoundary::None);
             for (auto& file : new_files) file.reset();
             return &*current;
         }
-        if (all_flush) {
+        if (all_at_boundary && boundary == QueueBoundary::Flush) {
             current.emplace(Flush{});
-            at_flush.fill(false);
+            boundaries.fill(QueueBoundary::None);
             return &*current;
         }
 
         const auto index = sequence_number % N;
-        if (ended[index] || at_new_file[index] || at_flush[index]) {
+        if (boundaries[index] != QueueBoundary::None) {
             for (size_t i = 0; i < N; ++i) {
                 auto* message = in[i].front();
-                ASSERT(not message ||
-                           std::holds_alternative<EndOfStream>(*message) ||
-                           std::holds_alternative<NewFile>(*message) ||
-                           std::holds_alternative<Flush>(*message),
+                ASSERT(not message || queue_boundary(*message) != QueueBoundary::None,
                        "Missing trigger batch sequence");
             }
             return nullptr;

@@ -27,32 +27,29 @@ class Delay {
     std::jthread m_thread;
 
     bool at_boundary(const auto &extractor) const {
-        return extractor.eof() || extractor.new_file() || extractor.flush();
+        return extractor.boundary() != QueueBoundary::None;
     }
 
     Step finish_boundary(std::stop_token stop) {
-        ASSERT(hit_extractor.eof() == trigger_extractor.eof(),
+        const auto boundary = hit_extractor.boundary();
+        ASSERT(boundary == trigger_extractor.boundary(),
                "Mismatched hit and trigger stream boundaries");
-        ASSERT(hit_extractor.new_file() == trigger_extractor.new_file(),
-               "Mismatched hit and trigger stream boundaries");
-        ASSERT(hit_extractor.flush() == trigger_extractor.flush(),
-               "Mismatched hit and trigger stream boundaries");
-        if (hit_extractor.eof() && trigger_extractor.eof()) {
+        if (boundary == QueueBoundary::EndOfStream) {
             inj.finish(stop);
             return Step::Finished;
         }
-        if (hit_extractor.flush() && trigger_extractor.flush()) {
+        if (boundary == QueueBoundary::Flush) {
             if (not inj.flush(stop)) return Step::Stopped;
-            hit_extractor.consume_flush();
-            trigger_extractor.consume_flush();
+            hit_extractor.consume_boundary();
+            trigger_extractor.consume_boundary();
         }
-        if (hit_extractor.new_file() && trigger_extractor.new_file()) {
+        if (boundary == QueueBoundary::NewFile) {
             ASSERT(hit_extractor.file_message().filename ==
                    trigger_extractor.file_message().filename,
                    "Mismatched hit and trigger files");
             inj.new_file(hit_extractor.file_message().filename, stop);
-            hit_extractor.consume_new_file();
-            trigger_extractor.consume_new_file();
+            hit_extractor.consume_boundary();
+            trigger_extractor.consume_boundary();
             last_delay_time = 0;
             diff_time = 0;
         }
