@@ -121,4 +121,4 @@ observed), then flushes and sends EOF to the sink.
 | `src/Sink.*`, `../src/QueueUtility/QueueConcepts.hpp` | Queue draining and queue interface concepts |
 | `src/Rotation.*` | Coordinate orientation transforms |
 | `tests/` | Unit tests for batch-pool, sorting/merging, and rotation components |
-| `benchmarks/benchmark.cpp` | Parser and parser-plus-sorter benchmarks |
+| `benchmarks/` | Google Benchmark cases for parser stages and pipeline operations |

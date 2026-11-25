@@ -1,25 +1,26 @@
 #include <benchmark/benchmark.h>
 
-#include "Parsing/ParseTrigger.hpp"
+#include "Operations/Sink.hpp"
 #include "Utility/SPSCQueue.h"
 
-static void BM_parse_trigger(benchmark::State& state) {
-    Batch_Pool<U64Batch> batch_pool(5);
-    Batch_Pool<TriggerBatch> batch_pool_trigger(5);
-    ParseTrigger parser(batch_pool_trigger);
+static void BM_sink_thread(benchmark::State& state) {
+    Batch_Pool<HitBatch> pool(8);
+    rigtorp::SPSCQueue<QueueMessage<HitBatchPtr>> queue(4);
+    Sink<decltype(queue), HitBatchPtr> sink;
+    sink.start(queue);
 
-    for (auto &batch: batch_pool.m_batches) {
-        for (auto &b: *batch) {
-            b = 0x1234;
+    for (auto _ : state) {
+        auto batch = pool.acquire_batch_blocking();
+        batch->size = 1;
+        while (not queue.try_push(
+            QueueMessage<HitBatchPtr>(std::move(batch)))) {
         }
     }
 
-    rigtorp::SPSCQueue<U64BatchPtr> spsc(100);
-    for (auto _ : state) {
-        auto batch = parser.parse(batch_pool.acquire_batch_blocking());
-        benchmark::DoNotOptimize(batch);
+    while (not queue.try_push(QueueMessage<HitBatchPtr>(EndOfStream{}))) {
     }
-    state.SetItemsProcessed(state.iterations()*BATCH_SIZE);
+    sink.wait();
+    state.SetItemsProcessed(state.iterations());
 }
 
-BENCHMARK(BM_parse_trigger);
+BENCHMARK(BM_sink_thread);

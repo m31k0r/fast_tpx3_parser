@@ -116,11 +116,14 @@ if(ENABLE_BENCHMARKS)
   add_executable(benchmarks
         benchmarks/benchmark.cpp
         benchmarks/bm_clock_correction.cpp
+        benchmarks/bm_delay.cpp
+        benchmarks/bm_merger.cpp
+        benchmarks/bm_parser.cpp
         benchmarks/bm_parse_trigger.cpp
         benchmarks/bm_sorter.cpp
-        benchmarks/bm_clock_correction.cpp
         benchmarks/bm_sink.cpp
-)
+        benchmarks/bm_worker.cpp
+  )
 
   target_link_libraries(benchmarks
         PRIVATE

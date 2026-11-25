@@ -38,14 +38,14 @@ or CLI target.
 
 ## Benchmarks
 
-The benchmark cases read `./tpx3.tpx3` from the current working directory.
-Provide a TPX3 data file at that path before running the benchmark:
+Benchmarks use generated in-memory workloads; no TPX3 data file is required.
+They cover header dispatch, trigger parsing and its worker thread, sorting,
+trigger and hit merging, delay processing, the sink thread, and clock
+correction. Run them with:
 
 ```sh
 ./build/debug/benchmarks
 ```
-
-No input data file is included in the repository.
 
 ## Documentation
 
