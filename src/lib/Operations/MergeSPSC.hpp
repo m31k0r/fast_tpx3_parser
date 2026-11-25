@@ -19,6 +19,15 @@ class SPSCs2SPSC {
     size_t sequence_number = 0;
     bool eof_emitted = false;
 
+    void absorb_boundary(size_t i) {
+        auto* message = in[i].front();
+        if (!message || queue_boundary(*message) == QueueBoundary::None) return;
+        boundaries[i] = queue_boundary(*message);
+        if (boundaries[i] == QueueBoundary::NewFile)
+            new_files[i] = std::get<NewFile>(*message);
+        in[i].pop();
+    }
+
    public:
     SPSCs2SPSC(std::array<InQueue, N>& queues) : in(queues) {}
 
@@ -27,15 +36,7 @@ class SPSCs2SPSC {
         if (eof_emitted) return nullptr;
 
         for (size_t i = 0; i < N; ++i) {
-            if (boundaries[i] == QueueBoundary::None) {
-                auto* message = in[i].front();
-                if (message && queue_boundary(*message) != QueueBoundary::None) {
-                    boundaries[i] = queue_boundary(*message);
-                    if (boundaries[i] == QueueBoundary::NewFile)
-                        new_files[i] = std::get<NewFile>(*message);
-                    in[i].pop();
-                }
-            }
+            if (boundaries[i] == QueueBoundary::None) absorb_boundary(i);
         }
         const bool all_at_boundary =
             std::all_of(boundaries.begin(), boundaries.end(), [](auto boundary) {
@@ -78,6 +79,11 @@ class SPSCs2SPSC {
         }
         auto* message = in[index].front();
         if (not message) return nullptr;
+        if (queue_boundary(*message) != QueueBoundary::None) {
+            // A boundary arrived after the scan above; absorb it and re-evaluate.
+            absorb_boundary(index);
+            return front();
+        }
         auto& batch = std::get<T>(*message);
         ASSERT(batch && batch->sequence_number == sequence_number,
                "Unexpected trigger batch sequence");
