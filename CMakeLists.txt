@@ -90,6 +90,7 @@ if(ENABLE_TESTS)
 
           src/Camera_test.cpp
           src/Rotation_test.cpp
+          src/Rotation.cpp
   )
 
   target_link_libraries(unit_tests

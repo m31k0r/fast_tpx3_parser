@@ -5,6 +5,7 @@
 #include <thread>
 #include <variant>
 
+#include "../../Camera.hpp"
 #include "Operations/Delay.hpp"
 #include "Operations/MergeSPSC.hpp"
 #include "Operations/Merging_Buffer.hpp"
@@ -54,10 +55,12 @@ TEST_CASE("Extractor preserves EOF after buffered partial batches", "[EOF]") {
     REQUIRE(extractor.front().toa() == 10);
     extractor.pop();
     REQUIRE(extractor.front().toa() == 20);
-    REQUIRE_FALSE(extractor.eof());
+    REQUIRE(extractor.boundary() == QueueBoundary::None);
     extractor.pop();
     REQUIRE_FALSE(extractor.front());
-    REQUIRE(extractor.eof());
+    REQUIRE(extractor.boundary() == QueueBoundary::EndOfStream);
+    REQUIRE_FALSE(extractor.front());
+    REQUIRE(extractor.boundary() == QueueBoundary::EndOfStream);
 }
 
 TEST_CASE("Extractor preserves file boundaries between batches", "[NewFile]") {
@@ -77,9 +80,10 @@ TEST_CASE("Extractor preserves file boundaries between batches", "[NewFile]") {
     REQUIRE(extractor.front().toa() == 10);
     extractor.pop();
     REQUIRE_FALSE(extractor.front());
-    REQUIRE(extractor.new_file());
+    REQUIRE(extractor.boundary() == QueueBoundary::NewFile);
     REQUIRE(extractor.file_message().filename == "next.tpx3");
-    extractor.consume_new_file();
+    extractor.consume_boundary();
+    REQUIRE(extractor.boundary() == QueueBoundary::None);
     REQUIRE(extractor.front().toa() == 20);
 }
 
@@ -96,9 +100,31 @@ TEST_CASE("Extractor preserves explicit flush boundaries", "[Flush]") {
     REQUIRE(extractor.front().toa() == 10);
     extractor.pop();
     REQUIRE_FALSE(extractor.front());
-    REQUIRE(extractor.flush());
-    extractor.consume_flush();
-    REQUIRE_FALSE(extractor.flush());
+    REQUIRE(extractor.boundary() == QueueBoundary::Flush);
+    extractor.consume_boundary();
+    REQUIRE(extractor.boundary() == QueueBoundary::None);
+}
+
+TEST_CASE("Extractor handles consecutive buffered boundaries", "[Flush][NewFile][EOF]") {
+    Batch_Pool<HitBatch> pool(1);
+    HitQueue queue(3);
+    Extractor<HitQueue, HitBatchPtr> extractor(queue);
+
+    queue.push(Flush{});
+    queue.push(NewFile{"next.tpx3"});
+    queue.push(EndOfStream{});
+    extractor.drain();
+    REQUIRE_FALSE(extractor.front());
+    REQUIRE(extractor.boundary() == QueueBoundary::Flush);
+    extractor.drain();
+    extractor.consume_boundary();
+    extractor.drain();
+    REQUIRE_FALSE(extractor.front());
+    REQUIRE(extractor.boundary() == QueueBoundary::NewFile);
+    REQUIRE(extractor.file_message().filename == "next.tpx3");
+    extractor.consume_boundary();
+    REQUIRE_FALSE(extractor.front());
+    REQUIRE(extractor.boundary() == QueueBoundary::EndOfStream);
 }
 
 TEST_CASE("Trigger merger waits for every input and preserves sequence",
@@ -290,8 +316,9 @@ TEST_CASE("Delay flushes hits after trigger EOF and then emits EOF", "[EOF]") {
     triggers.push(std::move(trigger));
     triggers.push(EndOfStream{});
     {
-        Delay<HitQueue, TriggerQueue, HitQueue> delay(hits, triggers, output,
-                                                      pool, camera_);
+        Delay<HitQueue, TriggerQueue, HitQueue> delay(
+            hits, triggers, output, pool, camera_.diff_trigger_type,
+            camera_.delay_trigger_type);
         auto* message = wait_front(output);
         REQUIRE(message);
         auto& batch = std::get<HitBatchPtr>(*message);
@@ -319,8 +346,9 @@ TEST_CASE("Delay processes hits without triggers", "[EOF]") {
     hits.push(std::move(hit));
     hits.push(EndOfStream{});
     triggers.push(EndOfStream{});
-    Delay<HitQueue, TriggerQueue, HitQueue> delay(hits, triggers, output, pool,
-                                                  camera_);
+    Delay<HitQueue, TriggerQueue, HitQueue> delay(
+        hits, triggers, output, pool, camera_.diff_trigger_type,
+        camera_.delay_trigger_type);
     auto* message = wait_front(output);
     REQUIRE(message);
     REQUIRE(std::get<HitBatchPtr>(*message)->delay[0] == 0);
@@ -360,8 +388,9 @@ TEST_CASE("New-file boundaries travel through hit merge and delay",
     triggers.push(EndOfStream{});
     Camera camera;
     {
-        Delay<Merger, TriggerQueue, HitQueue> delay(hit_merger, triggers,
-                                                    output, pool, camera);
+        Delay<Merger, TriggerQueue, HitQueue> delay(
+            hit_merger, triggers, output, pool, camera.diff_trigger_type,
+            camera.delay_trigger_type);
         auto* message = wait_front(output);
         REQUIRE(message);
         REQUIRE(std::get<HitBatchPtr>(*message)->toa[0] == 10);
@@ -388,8 +417,8 @@ TEST_CASE("Sorter emits a retained full batch before EOF", "[EOF]") {
     RawQueue input(2);
     HitQueue output(2);
     Camera camera;
-    auto sorter = std::make_unique<Sort<RawQueue, HitQueue>>(input, output,
-                                                             hit_pool, camera);
+    auto sorter = std::make_unique<Sort<RawQueue, HitQueue, Camera>>(
+        input, output, hit_pool, camera);
     auto raw = raw_pool.acquire_batch_blocking();
     for (size_t i = 0; i < BATCH_SIZE; ++i) raw->push_back(0);
     input.push(std::move(raw));
@@ -413,7 +442,7 @@ TEST_CASE("Sorter flushes its retained batch before forwarding flush",
     RawQueue input(2);
     HitQueue output(2);
     Camera camera;
-    auto sorter = std::make_unique<Sort<RawQueue, HitQueue>>(
+    auto sorter = std::make_unique<Sort<RawQueue, HitQueue, Camera>>(
         input, output, hit_pool, camera);
     auto raw = raw_pool.acquire_batch_blocking();
     for (size_t i = 0; i < BATCH_SIZE; ++i) raw->push_back(0);
@@ -452,9 +481,9 @@ TEST_CASE("EOF travels through the complete pipeline", "[EOF]") {
                           return Extractor<HitQueue, HitBatchPtr>(sorted[i]);
                       }));
     SPSCs2SPSC<TriggerQueue, 1, TriggerBatchPtr> trigger_merger(parsed);
-    std::array<std::unique_ptr<Sort<RawQueue, HitQueue>>, 4> sorters;
+    std::array<std::unique_ptr<Sort<RawQueue, HitQueue, Camera>>, 4> sorters;
     for (size_t i = 0; i < 4; ++i) {
-        sorters[i] = std::make_unique<Sort<RawQueue, HitQueue>>(
+        sorters[i] = std::make_unique<Sort<RawQueue, HitQueue, Camera>>(
             raw_hits[i], sorted[i], hit_pool, camera, static_cast<uint8_t>(i));
         if (i < 2) {
             auto batch = raw_pool.acquire_batch_blocking();
@@ -472,7 +501,8 @@ TEST_CASE("EOF travels through the complete pipeline", "[EOF]") {
     Worker<TestTriggerWork, RawQueue, TriggerQueue> worker(
         TestTriggerWork{trigger_pool}, raw_triggers[0], parsed[0]);
     Delay<Merger, decltype(trigger_merger), HitQueue> delay(
-        hit_merger, trigger_merger, output, hit_pool, camera);
+        hit_merger, trigger_merger, output, hit_pool, camera.diff_trigger_type,
+        camera.delay_trigger_type);
     auto* message = wait_front(output);
     REQUIRE(message);
     auto& batch = std::get<HitBatchPtr>(*message);
