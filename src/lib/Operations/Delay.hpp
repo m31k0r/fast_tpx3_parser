@@ -9,7 +9,6 @@
 #include "Constants.hpp"
 #include "QueueUtility/Extractor.hpp"
 #include "QueueUtility/Injector.hpp"
-#include "Utility/AdaptivBackoff.hpp"
 
 template<typename HitQueue, typename TriggerQueue, typename OutQueue>
 class Delay {
@@ -72,7 +71,6 @@ class Delay {
     // one; trigger_diff is the interval between them, 0 if there is no next.
     Step emit_hit(const auto &hit,
                   std::stop_token stop) {
-        adaptive_backoff backoff;
         const Hit out{
             hit.toa(),
             hit.tot(),
@@ -82,7 +80,6 @@ class Delay {
             static_cast<uint32_t>(diff_time)
         };
         while (not inj.try_push(out)) {
-            backoff.pause();
             if (stop.stop_requested()) return Step::Stopped;
         }
         hit_extractor.pop();
@@ -121,7 +118,6 @@ class Delay {
                 return Step::Continue;
             }
         }
-        std::cout << std::flush;
         const auto result = emit_hit(first_hit, stop);
         return result;
     }
