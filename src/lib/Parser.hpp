@@ -1,5 +1,5 @@
 #pragma once
-#include <assert.hpp>
+#include <libassert/assert.hpp>
 #include <chrono>
 #include <cstdint>
 #include <print>
