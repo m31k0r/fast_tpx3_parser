@@ -121,7 +121,6 @@ class Delay {
                 return Step::Continue;
             }
         }
-        std::cout << std::flush;
         const auto result = emit_hit(first_hit, stop);
         return result;
     }
