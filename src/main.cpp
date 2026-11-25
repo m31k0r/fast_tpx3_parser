@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
         std::distance(mmap.begin(), mmap.end()) * sizeof(uint64_t) * 1e-9;
     HitSPSC outqueue(10);
     Camera camera;
-    Parser<2, HitSPSC, Camera> parser(outqueue, camera);
+    Parser<1, HitSPSC, Camera> parser(outqueue, camera);
     Exporter<HitSPSC, HitBatchPtr> exporter;
     //Sink<HitSPSC, HitBatchPtr> exporter;
     exporter.start(outqueue);

@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
-#include <optional>
 #include <libassert/assert.hpp>
 
 #include "QueueUtility/QueueMessage.hpp"
@@ -14,75 +12,32 @@ class SPSCs2SPSC {
     using Message = QueueMessage<T>;
     std::optional<Message> current;
     std::array<InQueue, N>& in;
-    std::array<QueueBoundary, N> boundaries{};
-    std::array<std::optional<NewFile>, N> new_files{};
     size_t sequence_number = 0;
-    bool eof_emitted = false;
+    bool terminated = false;
 
    public:
     SPSCs2SPSC(std::array<InQueue, N>& queues) : in(queues) {}
 
     Message* front() {
         if (current) return &*current;
-        if (eof_emitted) return nullptr;
-
-        for (size_t i = 0; i < N; ++i) {
-            if (boundaries[i] == QueueBoundary::None) {
-                auto* message = in[i].front();
-                if (message && queue_boundary(*message) != QueueBoundary::None) {
-                    boundaries[i] = queue_boundary(*message);
-                    if (boundaries[i] == QueueBoundary::NewFile)
-                        new_files[i] = std::get<NewFile>(*message);
-                    in[i].pop();
-                }
-            }
-        }
-        const bool all_at_boundary =
-            std::all_of(boundaries.begin(), boundaries.end(), [](auto boundary) {
-                return boundary != QueueBoundary::None;
-            });
-        const auto boundary = boundaries.front();
-        ASSERT(not all_at_boundary ||
-                   std::all_of(boundaries.begin(), boundaries.end(),
-                               [boundary](auto b) { return b == boundary; }),
-               "Mismatched trigger-stream boundaries");
-        if (all_at_boundary && boundary == QueueBoundary::EndOfStream) {
-            current.emplace(EndOfStream{});
-            eof_emitted = true;
-            return &*current;
-        }
-        if (all_at_boundary && boundary == QueueBoundary::NewFile) {
-            for (size_t i = 1; i < N; ++i) {
-                ASSERT(new_files[i]->filename == new_files[0]->filename,
-                       "Mismatched new-file boundaries");
-            }
-            current.emplace(*new_files[0]);
-            boundaries.fill(QueueBoundary::None);
-            for (auto& file : new_files) file.reset();
-            return &*current;
-        }
-        if (all_at_boundary && boundary == QueueBoundary::Flush) {
-            current.emplace(Flush{});
-            boundaries.fill(QueueBoundary::None);
-            return &*current;
-        }
+        if (terminated) return nullptr;
 
         const auto index = sequence_number % N;
-        if (boundaries[index] != QueueBoundary::None) {
-            for (size_t i = 0; i < N; ++i) {
-                auto* message = in[i].front();
-                ASSERT(not message || queue_boundary(*message) != QueueBoundary::None,
-                       "Missing trigger batch sequence");
-            }
+        if (in[index].front() == nullptr)
             return nullptr;
-        }
-        auto* message = in[index].front();
-        if (not message) return nullptr;
-        auto& batch = std::get<T>(*message);
-        ASSERT(batch && batch->sequence_number == sequence_number,
-               "Unexpected trigger batch sequence");
-        current.emplace(std::move(batch));
+        auto message = std::move(*in[index].front());
         in[index].pop();
+
+
+        if (queue_boundary(message) != QueueBoundary::None) {
+            current.emplace(std::move(message));
+            return &*current;
+        }
+
+        auto batch = std::get<T>(std::move(message));
+        ASSERT(batch);
+        ASSERT(batch->sequence_number == sequence_number, "Unexpected trigger batch sequence");
+        current.emplace(std::move(batch));
         ++sequence_number;
         return &*current;
     }

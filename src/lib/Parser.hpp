@@ -77,8 +77,9 @@ struct Pusher {
     }
 
     void flush() {
-        std::for_each(hit_inj.begin(),hit_inj.end(),[](auto &f){f.flush();});
-        trigger_inj.flush();}
+        std::for_each(hit_inj.begin(), hit_inj.end(), [](auto &f) { f.flush(); });
+        trigger_inj.flush();
+    }
 };
 
 template<size_t Trigger_Parse_Threads>
@@ -152,25 +153,30 @@ class Parser {
                     m_batch_handle.sorted_hit_queue[i]);
             })
     };
-
+    //Sink<TriggerMerger, TriggerBatchPtr> sink;
+    //Sink<Merger, HitBatchPtr> sink_hit;
     Delay<Merger, TriggerMerger, HitSPSC> delay;
-    OUT_QUEUE &out_queue{QUEUE_SIZE};
+    OUT_QUEUE &out_queue;
 
 public:
-    Parser(OUT_QUEUE &out_queue, Camera &camera) :
-               header(m_batch_handle.pusher),
-               sort_hits(make_array_l<Sort_t>(
-                   std::make_index_sequence<4>{}, [this, &camera](int i) {
-                       return Sort_t(
-                           m_batch_handle.hit_queue[i],
-                           m_batch_handle.sorted_hit_queue[i],
-                           m_batch_handle.Hitbatch_pool, camera,static_cast<uint8_t>(i));
-                   })),
-               delay(merger, trigger_out_queue, out_queue,
-                     m_batch_handle.Hitbatch_pool, camera.delay_trigger_type, camera.diff_trigger_type), out_queue(out_queue) {
+    Parser(OUT_QUEUE &out_queue, Camera &camera) : header(m_batch_handle.pusher),
+                                                   sort_hits(make_array_l<Sort_t>(
+                                                       std::make_index_sequence<4>{}, [this, &camera](int i) {
+                                                           return Sort_t(
+                                                               m_batch_handle.hit_queue[i],
+                                                               m_batch_handle.sorted_hit_queue[i],
+                                                               m_batch_handle.Hitbatch_pool, camera,
+                                                               static_cast<uint8_t>(i));
+                                                       })),
+                                                   delay(merger, trigger_out_queue, out_queue,
+                                                         m_batch_handle.Hitbatch_pool, camera.delay_trigger_type,
+                                                         camera.diff_trigger_type),
+                                                   out_queue(out_queue) {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
         }
+        //sink.start(trigger_out_queue);
+        //sink_hit.start(merger);
     };
 
     void parseHeader(tpx3_helper::Header t_header) {
