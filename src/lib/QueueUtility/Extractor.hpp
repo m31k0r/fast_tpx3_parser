@@ -1,5 +1,5 @@
 #pragma once
-#include <assert.hpp>
+#include <libassert/assert.hpp>
 #include <deque>
 #include <memory>
 #include <type_traits>
