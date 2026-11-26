@@ -7,6 +7,7 @@
 
 #include "Operations/Sorter.hpp"
 #include "Utility/SPSCQueue.h"
+#include "Camera.hpp"
 
 namespace {
 using InputQueue = rigtorp::SPSCQueue<QueueMessage<U64BatchPtr>>;
@@ -49,7 +50,7 @@ TEST_CASE("Sorter sorts a partial input batch and forwards EOF", "[Sorter]")
     InputQueue input(2);
     OutputQueue output(2);
     Camera camera;
-    Sort<InputQueue, OutputQueue> sorter(input, output, output_pool, camera);
+    Sort<InputQueue, OutputQueue, Camera> sorter(input, output, output_pool, camera);
 
     auto batch = input_pool.acquire_batch_blocking();
     batch->push_back(make_hit_data(3));
@@ -75,7 +76,7 @@ TEST_CASE("Sorter merges a full batch with trailing partial hits",
     InputQueue input(3);
     OutputQueue output(3);
     Camera camera;
-    Sort<InputQueue, OutputQueue> sorter(input, output, output_pool, camera);
+    Sort<InputQueue, OutputQueue, Camera> sorter(input, output, output_pool, camera);
 
     auto full = input_pool.acquire_batch_blocking();
     for (size_t i = BATCH_SIZE; i > 0; --i) {

@@ -22,6 +22,7 @@ struct RecordingPusher {
         hits.emplace_back(word, chip);
     }
     void insert_trigger(uint64_t word) { triggers.push_back(word); }
+    void flush() {}
 };
 
 auto temporary_path() {

@@ -24,6 +24,7 @@ add_library(fastTPX3 STATIC
         src/lib/Utility/Memory_Map.cpp
         src/lib/Parsing/tpx3_helper.cpp
         src/lib/Utility/AdaptivBackoff.cpp
+        src/lib/Batch/Batch.cpp
 )
 
 target_include_directories(fastTPX3
@@ -92,7 +93,7 @@ if(ENABLE_TESTS)
           src/Rotation_test.cpp
           src/Rotation.cpp
   )
-
+  target_include_directories(unit_tests PRIVATE src)
   target_link_libraries(unit_tests
         PRIVATE
         fastTPX3

@@ -41,7 +41,7 @@ static void BM_delay_thread(benchmark::State& state) {
         for (auto _ : state) {
             auto hit_batch = hit_pool.acquire_batch_blocking();
             for (size_t i = 0; i < hits_per_iteration; ++i) {
-                hit_batch->push_back({static_cast<uint64_t>(i), 1, 2, 3});
+                hit_batch->push_back({static_cast<uint64_t>(i), 1, 2, 3,4});
             }
             push_hit_message(
                 hits, QueueMessage<HitBatchPtr>(std::move(hit_batch)));

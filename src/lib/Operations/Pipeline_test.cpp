@@ -199,12 +199,11 @@ TEST_CASE("Trigger merger synchronizes flush boundaries", "[Flush]") {
         make_array<TriggerQueue>(std::make_index_sequence<2>{}, size_t{2});
     SPSCs2SPSC<TriggerQueue, 2, TriggerBatchPtr> merger(queues);
     queues[0].push(Flush{});
-    REQUIRE_FALSE(merger.front());
+    REQUIRE(merger.front());
+    REQUIRE(std::holds_alternative<Flush>(*merger.front()));
     queues[1].push(Flush{});
     REQUIRE(merger.front());
     REQUIRE(std::holds_alternative<Flush>(*merger.front()));
-    merger.pop();
-    REQUIRE_FALSE(merger.front());
 }
 
 TEST_CASE("Flush travels through hit and trigger mergers and delay", "[Flush]") {

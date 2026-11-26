@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "ParseHits.hpp"
+#include "Camera.hpp"
 
 namespace {
 uint64_t make_hit_word(uint16_t pixel_address) {

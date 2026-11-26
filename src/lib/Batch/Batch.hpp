@@ -61,6 +61,17 @@ struct Hit {
         return os << hit.toa << ',' << hit.tot << ',' << hit.x << ',' << hit.y
                << ',' << hit.delay << ',' << hit.trigger_diff << ',' << hit.cluster_tot << ',' << hit.cluster_size;
     }
+    Hit(uint64_t toa, uint16_t tot, uint16_t x, uint16_t y,
+        uint32_t delay = 0, uint32_t trigger_diff = 0,
+        uint16_t cluster_tot = 0, uint16_t cluster_size = 1)
+        : toa(toa),
+          tot(tot),
+          x(x),
+          y(y),
+          delay(delay),
+          trigger_diff(trigger_diff),
+          cluster_tot(cluster_tot),
+          cluster_size(cluster_size) {}
 };
 
 
@@ -98,18 +109,3 @@ struct alignas(std::hardware_destructive_interference_size) HitBatch {
 using U64BatchPtr = typename Batch_Pool<U64Batch>::BatchPtr;
 using TriggerBatchPtr = typename Batch_Pool<TriggerBatch>::BatchPtr;
 using HitBatchPtr = typename Batch_Pool<HitBatch>::BatchPtr;
-
-
-#include "QueueUtility/Iterator.hpp"
-
-inline Hit::Hit(HitIterator iter) : toa(iter.toa()), tot(iter.tot()), x(iter.x()), y(iter.y()), delay(iter.delay()),
-                                    trigger_diff(iter.trigger_diff()), cluster_tot(iter.cluster_tot()),
-                                    cluster_size(iter.cluster_size()) {
-}
-
-inline Hit HitBatch::operator[](size_t index) {
-    // Return a Hit by value because the data is stored in SoA format.
-    return Hit(
-        HitIterator(this, index)
-    );
-}
