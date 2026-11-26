@@ -87,6 +87,7 @@ if(ENABLE_TESTS)
         src/lib/Operations/Sorter_test.cpp
         src/lib/Operations/Worker_test.cpp
         src/lib/Operations/Pipeline_test.cpp
+        src/lib/Parser_test.cpp
 
           src/Camera_test.cpp
           src/Rotation_test.cpp

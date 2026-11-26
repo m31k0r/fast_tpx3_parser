@@ -25,15 +25,26 @@ class SPSCs2SPSC {
         const auto index = sequence_number % N;
         if (in[index].front() == nullptr)
             return nullptr;
-        auto message = std::move(*in[index].front());
-        in[index].pop();
-
-
-        if (queue_boundary(message) != QueueBoundary::None) {
-            current.emplace(std::move(message));
+        const auto boundary = queue_boundary(*in[index].front());
+        if (boundary != QueueBoundary::None) {
+            for (auto& queue : in) {
+                if (!queue.front()) return nullptr;
+                ASSERT(queue_boundary(*queue.front()) == boundary,
+                       "Mismatched trigger-stream boundaries");
+                if (boundary == QueueBoundary::NewFile) {
+                    ASSERT(std::get<NewFile>(*queue.front()).filename ==
+                               std::get<NewFile>(*in[index].front()).filename,
+                           "Mismatched trigger-stream file names");
+                }
+            }
+            current.emplace(std::move(*in[index].front()));
+            for (auto& queue : in) queue.pop();
+            terminated = boundary == QueueBoundary::EndOfStream;
             return &*current;
         }
 
+        auto message = std::move(*in[index].front());
+        in[index].pop();
         auto batch = std::get<T>(std::move(message));
         ASSERT(batch);
         ASSERT(batch->sequence_number == sequence_number, "Unexpected trigger batch sequence");
