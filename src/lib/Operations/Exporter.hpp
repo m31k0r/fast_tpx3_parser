@@ -28,7 +28,7 @@ class Exporter {
         for (size_t i = 0; i < batch->size; ++i) {
             cut_counter++;
             if (cut_counter<MAX_EXPORT)
-            outfile << batch->operator[](i) << "\n";
+            outfile << Hit(batch->operator[](i)) << "\n";
         }
     }
 

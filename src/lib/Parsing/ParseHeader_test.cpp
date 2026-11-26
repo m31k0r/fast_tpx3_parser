@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "ParseHeader.hpp"
-#include "Utility/Memory_Map.hpp"
+#include "Memory_Map.hpp"
 #include "tpx3_helper.hpp"
 
 namespace {

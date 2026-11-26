@@ -4,7 +4,7 @@
 #include "lib/Operations/Exporter.hpp"
 #include "lib/Parser.hpp"
 #include "lib/Parsing/tpx3_helper.hpp"
-#include "lib/Utility/Memory_Map.hpp"
+#include "Memory_Map.hpp"
 
 #include <algorithm>
 #include <cmath>

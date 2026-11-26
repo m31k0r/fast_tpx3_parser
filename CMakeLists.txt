@@ -21,7 +21,6 @@ find_package(libassert REQUIRED)
 # ---------------------------------------------------------------------------
 
 add_library(fastTPX3 STATIC
-        src/lib/Utility/Memory_Map.cpp
         src/lib/Parsing/tpx3_helper.cpp
         src/lib/Utility/AdaptivBackoff.cpp
         src/lib/Batch/Batch.cpp
@@ -80,7 +79,7 @@ if(ENABLE_TESTS)
         src/lib/Parsing/tpx3_helper_test.cpp
         src/lib/QueueUtility/Iterator_test.cpp
         src/lib/Utility/AdaptivBackoff_test.cpp
-        src/lib/Utility/Memory_Map_test.cpp
+          src/Memory_Map_test.cpp
         src/lib/Utility/bits_test.cpp
         src/lib/Utility/helper_test.cpp
         src/lib/Utility/optional_test.cpp
@@ -92,6 +91,7 @@ if(ENABLE_TESTS)
           src/Camera_test.cpp
           src/Rotation_test.cpp
           src/Rotation.cpp
+          src/Memory_Map.cpp
   )
   target_include_directories(unit_tests PRIVATE src)
   target_link_libraries(unit_tests
@@ -133,7 +133,7 @@ if(ENABLE_BENCHMARKS)
 )
 endif()
 
-add_executable(main src/main.cpp src/Rotation.cpp)
+add_executable(main src/main.cpp src/Rotation.cpp         src/Memory_Map.cpp)
 
 target_link_libraries(main
         PRIVATE
