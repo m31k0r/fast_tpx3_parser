@@ -29,8 +29,10 @@ class SPSCs2SPSC {
         in[index].pop();
 
 
-        if (queue_boundary(message) != QueueBoundary::None) {
+        const auto boundary = queue_boundary(message);
+        if (boundary != QueueBoundary::None) {
             current.emplace(std::move(message));
+            terminated = boundary == QueueBoundary::EndOfStream;
             return &*current;
         }
 

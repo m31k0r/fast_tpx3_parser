@@ -154,7 +154,7 @@ class Parser {
     };
     //Sink<TriggerMerger, TriggerBatchPtr> sink;
     //Sink<Merger, HitBatchPtr> sink_hit;
-    Delay<Merger, TriggerMerger, HitSPSC> delay;
+    Delay<Merger, TriggerMerger, OUT_QUEUE> delay;
     OUT_QUEUE &out_queue;
 
 public:
@@ -168,8 +168,8 @@ public:
                                                                static_cast<uint8_t>(i));
                                                        })),
                                                    delay(merger, trigger_out_queue, out_queue,
-                                                         m_batch_handle.Hitbatch_pool, camera.delay_trigger_type,
-                                                         camera.diff_trigger_type),
+                                                         m_batch_handle.Hitbatch_pool, camera.diff_trigger_type,
+                                                         camera.delay_trigger_type),
                                                    out_queue(out_queue) {
         for (int i = 0; i < 4; ++i) {
             sort_hits[i].start_worker();
