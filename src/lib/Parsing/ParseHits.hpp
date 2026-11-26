@@ -80,6 +80,8 @@ class ParseHit {
             out_batch->tot[out_batch->size] = tot;
             out_batch->x[out_batch->size] = x_final;
             out_batch->y[out_batch->size] = y_final;
+            out_batch->cluster_size[out_batch->size] = 1;
+            out_batch->cluster_tot[out_batch->size] = tot;
             out_batch->size++;
         }
         return out_batch;
