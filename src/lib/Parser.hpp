@@ -2,7 +2,6 @@
 #include <libassert/assert.hpp>
 #include <chrono>
 #include <cstdint>
-#include <print>
 #include <utility>
 #include "Batch/Batch.hpp"
 #include "Batch/Batch_Pool.hpp"

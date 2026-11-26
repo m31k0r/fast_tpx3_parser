@@ -9,6 +9,8 @@
 
 constexpr auto NUM = 256;
 constexpr auto CH1_RISE = 0xF;
+constexpr auto CH1_Fall = 0xa;
+constexpr auto CH2_RISE = 0xe;
 constexpr auto CH2_FALL = 0xb;
 class Camera {
     std::pair<size_t, size_t> m_number_pixels_cam = {NUM, NUM};
@@ -16,7 +18,6 @@ class Camera {
     std::uint8_t m_number_of_chips = 4;
     std::vector<std::uint32_t> m_shift_x = {NUM, NUM, 0, 0};
     std::vector<std::uint32_t> m_shift_y = {NUM, 0, 0, NUM};
-    std::uint64_t m_trigger_delay = 0xF;
     std::vector<Rotation> m_rotation = {
         Rotation::from_string("LtRBtT"), Rotation::from_string("RtLTtB"),
         Rotation::from_string("RtLTtB"), Rotation::from_string("LtRBtT")};
@@ -26,7 +27,7 @@ class Camera {
     std::vector<uint8_t> m_gap_fill{0b0000, 0b0000, 0b0000, 0b0000};
 
    public:
-    uint16_t delay_trigger_type = CH1_RISE;
+    uint16_t delay_trigger_type = CH2_RISE;
     uint16_t diff_trigger_type = CH2_FALL;
 
    public:

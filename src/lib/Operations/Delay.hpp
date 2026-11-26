@@ -72,7 +72,8 @@ class Delay {
     Step emit_hit(HitIterator hit,
                   std::stop_token stop) {
         hit.trigger_diff(diff_time);
-        hit.delay(last_delay_time == 0 ? 0 : hit.toa() - last_delay_time);
+        ASSERT(last_delay_time==0 or hit.toa()<=last_delay_time);
+        hit.delay(last_delay_time == 0 ? 0 : last_delay_time-hit.toa());
         while (not inj.try_push(hit)) {
             if (stop.stop_requested()) return Step::Stopped;
         }
