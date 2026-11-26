@@ -103,7 +103,7 @@ struct alignas(std::hardware_destructive_interference_size) HitBatch {
         size++;
     }
 
-    Hit operator[](size_t index);
+    HitIterator operator[](size_t index);
 };
 
 using U64BatchPtr = typename Batch_Pool<U64Batch>::BatchPtr;

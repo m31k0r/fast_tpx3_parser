@@ -6,9 +6,7 @@ Hit::Hit(HitIterator iter) : toa(iter.toa()), tot(iter.tot()), x(iter.x()), y(it
                                     cluster_size(iter.cluster_size()) {
 }
 
-Hit HitBatch::operator[](size_t index) {
+HitIterator HitBatch::operator[](size_t index) {
     // Return a Hit by value because the data is stored in SoA format.
-    return Hit(
-        HitIterator(this, index)
-    );
+    return HitIterator(this, index);
 }
