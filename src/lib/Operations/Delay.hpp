@@ -69,17 +69,11 @@ class Delay {
 
     // Hit lies between the previous trigger (last_delay_time) and the next
     // one; trigger_diff is the interval between them, 0 if there is no next.
-    Step emit_hit(const auto &hit,
+    Step emit_hit(HitIterator hit,
                   std::stop_token stop) {
-        const Hit out{
-            hit.toa(),
-            hit.tot(),
-            hit.x(),
-            hit.y(),
-            static_cast<uint32_t>(last_delay_time == 0 ? 0 : hit.toa() - last_delay_time),
-            static_cast<uint32_t>(diff_time)
-        };
-        while (not inj.try_push(out)) {
+        hit.trigger_diff(diff_time);
+        hit.delay(last_delay_time == 0 ? 0 : hit.toa() - last_delay_time);
+        while (not inj.try_push(hit)) {
             if (stop.stop_requested()) return Step::Stopped;
         }
         hit_extractor.pop();
@@ -89,8 +83,8 @@ class Delay {
     Step step(std::stop_token stop) {
         // hit_extractor.drain();
         // trigger_extractor.drain();
-        const auto first_trigger = trigger_extractor.front();
-        const auto first_hit = hit_extractor.front();
+        const TriggerIterator first_trigger = trigger_extractor.front();
+        const HitIterator first_hit = hit_extractor.front();
 
         if (not first_hit) return handle_missing_hit(first_trigger, stop);
         // Wait until the next trigger is known or triggers have ended.

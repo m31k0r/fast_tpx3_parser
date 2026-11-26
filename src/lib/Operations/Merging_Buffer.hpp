@@ -95,7 +95,7 @@ class Merger {
                 return nullptr;
             }
             const auto hit = extractors[chip].front();
-            current_batch->push_back({hit.toa(), hit.tot(), hit.x(), hit.y()});
+            current_batch->push_back(hit);
             extractors[chip].pop();
         }
         current.emplace(std::move(current_batch));

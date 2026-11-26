@@ -20,17 +20,20 @@ struct alignas(std::hardware_destructive_interference_size) U64Batch {
     auto end() const { return data.begin() + size; }
     auto begin() { return data.begin(); }
     auto end() { return data.begin() + size; }
+
     void push_back(uint64_t t_data) {
         DEBUG_ASSERT(size <= BATCH_SIZE);
         data[size] = t_data;
         size++;
     }
 };
+
 struct alignas(std::hardware_destructive_interference_size) TriggerBatch {
     std::array<uint64_t, BATCH_SIZE> toa{};
     std::array<uint8_t, BATCH_SIZE> type{};
     size_t size{0};
     size_t sequence_number{0};
+
     void push_back(uint64_t t_toa, uint8_t t_type) {
         DEBUG_ASSERT(size < BATCH_SIZE);
         toa[size] = t_toa;
@@ -38,6 +41,9 @@ struct alignas(std::hardware_destructive_interference_size) TriggerBatch {
         size++;
     }
 };
+
+class HitIterator;
+
 struct Hit {
     uint64_t toa;
     uint16_t tot;
@@ -46,14 +52,18 @@ struct Hit {
     uint32_t delay = 0;
     uint32_t trigger_diff = 0;
 
-    uint16_t tot_cluster = 0;
+    uint16_t cluster_tot = 0;
     uint16_t cluster_size = 1;
 
-    friend std::ostream& operator<<(std::ostream& os, const Hit& hit) {
+    Hit(HitIterator iter);
+
+    friend std::ostream &operator<<(std::ostream &os, const Hit &hit) {
         return os << hit.toa << ',' << hit.tot << ',' << hit.x << ',' << hit.y
-                  << ',' << hit.delay << ',' << hit.trigger_diff << ',' << hit.tot_cluster << ',' << hit.cluster_size;
+               << ',' << hit.delay << ',' << hit.trigger_diff << ',' << hit.cluster_tot << ',' << hit.cluster_size;
     }
 };
+
+
 struct alignas(std::hardware_destructive_interference_size) HitBatch {
     std::array<uint64_t, BATCH_SIZE> toa{};
     std::array<uint16_t, BATCH_SIZE> tot{};
@@ -63,11 +73,12 @@ struct alignas(std::hardware_destructive_interference_size) HitBatch {
     std::array<uint32_t, BATCH_SIZE> delay{};
     std::array<uint32_t, BATCH_SIZE> trigger_diff{};
 
-    std::array<uint16_t, BATCH_SIZE> tot_cluster{};
+    std::array<uint16_t, BATCH_SIZE> cluster_tot{};
     std::array<uint16_t, BATCH_SIZE> cluster_size{};
 
     size_t size{0};
     size_t sequence_number{0};
+
     void push_back(Hit hit) {
         DEBUG_ASSERT(size <= BATCH_SIZE);
         toa[size] = hit.toa;
@@ -76,17 +87,29 @@ struct alignas(std::hardware_destructive_interference_size) HitBatch {
         y[size] = hit.y;
         delay[size] = hit.delay;
         trigger_diff[size] = hit.trigger_diff;
-        tot_cluster[size] = hit.tot_cluster;
+        cluster_tot[size] = hit.cluster_tot;
         cluster_size[size] = hit.cluster_size;
         size++;
     }
-    Hit operator[](size_t index) {
-        // Return a Hit by value because the data is stored in SoA format.
-        return Hit{toa[index], tot[index],   x[index],
-                   y[index],   delay[index], trigger_diff[index], tot_cluster[index],cluster_size[index]};
-    }
+
+    Hit operator[](size_t index);
 };
 
 using U64BatchPtr = typename Batch_Pool<U64Batch>::BatchPtr;
 using TriggerBatchPtr = typename Batch_Pool<TriggerBatch>::BatchPtr;
 using HitBatchPtr = typename Batch_Pool<HitBatch>::BatchPtr;
+
+
+#include "QueueUtility/Iterator.hpp"
+
+inline Hit::Hit(HitIterator iter) : toa(iter.toa()), tot(iter.tot()), x(iter.x()), y(iter.y()), delay(iter.delay()),
+                                    trigger_diff(iter.trigger_diff()), cluster_tot(iter.cluster_tot()),
+                                    cluster_size(iter.cluster_size()) {
+}
+
+inline Hit HitBatch::operator[](size_t index) {
+    // Return a Hit by value because the data is stored in SoA format.
+    return Hit(
+        HitIterator(this, index)
+    );
+}
