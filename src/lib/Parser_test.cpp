@@ -33,7 +33,8 @@ auto wait_front(TestOutput& output) {
 TEST_CASE("Parser uses the supplied output and camera trigger types") {
     TestOutput output;
     Camera camera;
-    Parser<1, TestOutput, Camera> parser(output, camera);
+    Parser<2, TestOutput, Camera> parser(output, camera);
+    parser.flush();
     const auto trigger = [](uint64_t type, uint64_t time) {
         return (TRIGGER_NIBBLE << 60) | (type << 56) | (time << 9) |
                (uint64_t{1} << 5);
@@ -47,6 +48,10 @@ TEST_CASE("Parser uses the supplied output and camera trigger types") {
     parser.finish();
 
     auto* message = wait_front(output);
+    REQUIRE(message);
+    REQUIRE(std::holds_alternative<Flush>(*message));
+    output.pop();
+    message = wait_front(output);
     REQUIRE(message);
     REQUIRE(std::holds_alternative<HitBatchPtr>(*message));
     auto& batch = std::get<HitBatchPtr>(*message);
