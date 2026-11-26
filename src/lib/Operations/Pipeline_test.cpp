@@ -193,14 +193,12 @@ TEST_CASE("Trigger merger forwards new-file boundaries and continues sequence",
     REQUIRE(std::get<TriggerBatchPtr>(*merger.front())->sequence_number == 2);
 }
 
-TEST_CASE("Trigger merger synchronizes flush boundaries", "[Flush]") {
-    Batch_Pool<TriggerBatch> pool(1);
+TEST_CASE("Trigger merger forwards boundaries without waiting for every input",
+          "[Flush]") {
     auto queues =
         make_array<TriggerQueue>(std::make_index_sequence<2>{}, size_t{2});
     SPSCs2SPSC<TriggerQueue, 2, TriggerBatchPtr> merger(queues);
     queues[0].push(Flush{});
-    REQUIRE_FALSE(merger.front());
-    queues[1].push(Flush{});
     REQUIRE(merger.front());
     REQUIRE(std::holds_alternative<Flush>(*merger.front()));
     merger.pop();
