@@ -20,7 +20,7 @@ static void BM_sink_thread(benchmark::State& state) {
     while (not queue.try_push(QueueMessage<HitBatchPtr>(EndOfStream{}))) {
     }
     sink.wait();
-    state.SetItemsProcessed(state.iterations());
+    state.SetItemsProcessed(state.iterations()*BATCH_SIZE);
 }
 
 BENCHMARK(BM_sink_thread);

@@ -11,14 +11,14 @@
 
 template <typename Queue, typename BatchPtr>
 class Sink {
-    size_t counter_batch = 0;
-    size_t counter = 0;
+    //size_t counter_batch = 0;
+    //size_t counter = 0;
     std::jthread m_thread;
     std::atomic_size_t received_flushes = 0;
 
     void consume(const BatchPtr& batch) {
-        ++counter_batch;
-        counter += batch->size;
+        //++counter_batch;
+        //counter += batch->size;
     }
 
    public:
@@ -26,15 +26,24 @@ class Sink {
     bool operator()(Queue& queue) {
         if constexpr (SCQueueable<Queue, QueueMessage<BatchPtr>>) {
             if (auto* message = queue.front()) {
-                if (std::holds_alternative<EndOfStream>(*message)) {
-                    queue.pop();
-                    return true;
-                }
-                if (std::holds_alternative<Flush>(*message))
-                    received_flushes.fetch_add(1);
-                if (std::holds_alternative<BatchPtr>(*message))
-                    consume(std::get<BatchPtr>(*message));
+                if (not message) return false;
+                auto value = std::move(*message);
                 queue.pop();
+
+                return std::visit(
+                    [this](auto&& item) -> bool {
+                        using T = std::decay_t<decltype(item)>;
+                        if constexpr (std::is_same_v<T, EndOfStream>) {
+                            return true;
+                        } else if constexpr (std::is_same_v<T, Flush>) {
+                            received_flushes.fetch_add(1);
+                        } else if constexpr (std::is_same_v<T, BatchPtr>) {
+                            if (!item) return false;
+                            consume(item);
+                        }
+                        return false;
+                    },
+                    value);
             }
         } else {
             if (auto* batch = queue.front()) {
@@ -68,8 +77,8 @@ class Sink {
             }
         }
     }
-    ~Sink() {
+    /*~Sink() {
         std::cout << "Received " << counter_batch << " batches with " << counter
                   << " events\n";
-    }
+    }*/
 };

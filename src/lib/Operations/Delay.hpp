@@ -57,7 +57,7 @@ class Delay {
 
     // No hit available: drop trailing triggers or finish at a shared boundary.
     Step handle_missing_hit(const auto &first_trigger, std::stop_token stop) {
-        trigger_extractor.drain();
+        //trigger_extractor.drain();
         if (not at_boundary(hit_extractor)) return Step::Continue;
         if (first_trigger) {
             trigger_extractor.pop();
@@ -72,8 +72,8 @@ class Delay {
     Step emit_hit(HitIterator hit,
                   std::stop_token stop) {
         hit.trigger_diff(diff_time);
-        ASSERT(last_delay_time==0 or hit.toa()<=last_delay_time);
-        hit.delay(last_delay_time == 0 ? 0 : last_delay_time-hit.toa());
+        if (not last_delay_time == 0) { ASSERT(hit.toa()<=last_delay_time); }
+        hit.delay(last_delay_time == 0 ? 0 : last_delay_time - hit.toa());
         while (not inj.try_push(hit)) {
             if (stop.stop_requested()) return Step::Stopped;
         }
@@ -82,37 +82,39 @@ class Delay {
     }
 
     Step step(std::stop_token stop) {
-        // hit_extractor.drain();
-        // trigger_extractor.drain();
         const TriggerIterator first_trigger = trigger_extractor.front();
         const HitIterator first_hit = hit_extractor.front();
 
         if (not first_hit) return handle_missing_hit(first_trigger, stop);
         // Wait until the next trigger is known or triggers have ended.
-        if (not first_trigger && not at_boundary(trigger_extractor)) {
-            hit_extractor.drain();
+        if (not first_trigger) {
+            //hit_extractor.drain();
+            if (not at_boundary(trigger_extractor)) return Step::Continue;
+            if (first_hit) {
+                hit_extractor.pop();
+            } else if (at_boundary(hit_extractor)) {
+                return finish_boundary(stop);
+            }
             return Step::Continue;
         }
 
-        if (not at_boundary(trigger_extractor)) {
-            DEBUG_ASSERT(first_trigger);
-            if (first_trigger.type() == diff_trigger_type) {
-                DEBUG_ASSERT(diff_time==0);
-                diff_time = first_trigger.toa() - last_delay_time;
-                trigger_extractor.pop();
-                return Step::Continue;
-            }
-            if (first_trigger.type() != delay_trigger_type) {
-                trigger_extractor.pop();
-                return Step::Continue;
-            }
-            if (first_hit.toa() > first_trigger.toa()) {
-                last_delay_time = first_trigger.toa();
-                diff_time = 0;
-                trigger_extractor.pop();
-                return Step::Continue;
-            }
+        ASSERT(first_trigger);
+        if (first_trigger.type() == diff_trigger_type) {
+            diff_time = first_trigger.toa() - last_delay_time;
+            trigger_extractor.pop();
+            return Step::Continue;
         }
+        if (first_trigger.type() != delay_trigger_type) {
+            trigger_extractor.pop();
+            return Step::Continue;
+        }
+        if (first_hit.toa() > last_delay_time) {
+            last_delay_time = first_trigger.toa();
+            diff_time = 0;
+            trigger_extractor.pop();
+            return Step::Continue;
+        }
+
         const auto result = emit_hit(first_hit, stop);
         return result;
     }
