@@ -31,7 +31,7 @@ class Delay {
 
     Step finish_boundary(std::stop_token stop) {
         const auto boundary = hit_extractor.boundary();
-        ASSERT(boundary == trigger_extractor.boundary(),
+        DEBUG_ASSERT(boundary == trigger_extractor.boundary(),
                "Mismatched hit and trigger stream boundaries");
         if (boundary == QueueBoundary::EndOfStream) {
             inj.finish(stop);
@@ -43,7 +43,7 @@ class Delay {
             trigger_extractor.consume_boundary();
         }
         if (boundary == QueueBoundary::NewFile) {
-            ASSERT(hit_extractor.file_message().filename ==
+            DEBUG_ASSERT(hit_extractor.file_message().filename ==
                    trigger_extractor.file_message().filename,
                    "Mismatched hit and trigger files");
             inj.new_file(hit_extractor.file_message().filename, stop);
@@ -72,7 +72,7 @@ class Delay {
     Step emit_hit(HitIterator hit,
                   std::stop_token stop) {
         hit.trigger_diff(diff_time);
-        if (not last_delay_time == 0) { ASSERT(hit.toa()<=last_delay_time); }
+        if (not last_delay_time == 0) { DEBUG_ASSERT(hit.toa()<=last_delay_time); }
         hit.delay(last_delay_time == 0 ? 0 : last_delay_time - hit.toa());
         while (not inj.try_push(hit)) {
             if (stop.stop_requested()) return Step::Stopped;
@@ -98,7 +98,7 @@ class Delay {
             return Step::Continue;
         }
 
-        ASSERT(first_trigger);
+        DEBUG_ASSERT(first_trigger);
         if (first_trigger.type() == diff_trigger_type) {
             diff_time = first_trigger.toa() - last_delay_time;
             trigger_extractor.pop();
